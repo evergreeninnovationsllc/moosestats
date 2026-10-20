@@ -1,13 +1,13 @@
 [
   {
     "id": "player-1",
-    "number": 9,
-    "name": "Alex Morgan",
+    "number": 12,
+    "name": "Camden Wallower",
     "position": "F",
     "shoots": "L",
-    "height": "6'0\"",
-    "weight": "185 lb",
-    "hometown": "Denver, CO",
+    "height": "6'2\"",
+    "weight": "220 lb",
+    "birth city": "Culpeper, VA",
     "photo": "",
     "bio": "Two-way forward known for pace, puck protection, and a strong work ethic.",
     "season": {
