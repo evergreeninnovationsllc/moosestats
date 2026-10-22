@@ -300,7 +300,12 @@
       hometown: ["hometown", "home"],
       age: ["age"],
       school: ["school"],
-      photo: ["photo", "photourl", "image", "imageurl", "headshot", "headshoturl"]
+      photo: [
+        "photo", "photourl", "playerphoto", "playerphotourl", "playerpicture",
+        "playerpictureurl", "picture", "pictureurl", "picturelink", "photolink",
+        "image", "imageurl", "imagelink", "profilephoto", "profileimage",
+        "headshot", "headshoturl", "headshotlink", "portrait", "portraiturl"
+      ]
     };
 
     function findColumn(headers, key) {
@@ -320,6 +325,19 @@
     function valueAt(row, headers, key) {
       const index = findColumn(headers, key);
       return index >= 0 ? String(row[index] ?? "").trim() : "";
+    }
+
+    // Accept direct image URLs and common Google Drive share links from the CSV.
+    // For best results, the spreadsheet photo column should contain a publicly
+    // viewable image URL (not an IMAGE() formula or a private file link).
+    function normalizePhotoURL(value) {
+      const raw = String(value ?? "").trim();
+      if (!raw) return "";
+      const match = raw.match(/https?:\/\/[^\s"'<>]+/i);
+      const url = match ? match[0].replace(/[),.;]+$/, "") : raw;
+      const driveFile = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([a-zA-Z0-9_-]+)/i);
+      if (driveFile) return `https://drive.google.com/uc?export=view&id=${driveFile[1]}`;
+      return url;
     }
 
     function num(value) {
@@ -370,7 +388,7 @@
           passes: valueAt(row, headers, "passes"),
           passPct: valueAt(row, headers, "passPct"),
           turnoverRatio: valueAt(row, headers, "turnoverRatio"),
-          photo: valueAt(row, headers, "photo"),
+          photo: normalizePhotoURL(valueAt(row, headers, "photo")),
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
         };
