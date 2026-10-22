@@ -80,9 +80,12 @@
     }
     .summary-card span { display: block; color: var(--muted); font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
     .summary-card strong { display: block; margin-top: 3px; font-size: 1.65rem; }
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+    .roster-section { margin: 26px 0 34px; }
+    .roster-section h2 { margin: 0 0 12px; padding-bottom: 9px; border-bottom: 2px solid var(--accent); font-size: clamp(1.25rem, 2.5vw, 1.7rem); }
+    .roster-section .section-count { color: var(--muted); font-size: .9rem; font-weight: 500; margin-left: 8px; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: 100%; }
     details.player {
-      align-self: start; overflow: hidden;
+      width: 100%; min-width: 0; align-self: start; overflow: hidden;
       background: var(--surface); border: 1px solid var(--line);
       border-radius: 15px; box-shadow: var(--shadow);
       transition: border-color .15s, transform .15s;
@@ -91,6 +94,7 @@
     details.player summary {
       list-style: none; cursor: pointer; padding: 17px;
     }
+    details.player summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
     details.player summary::-webkit-details-marker { display: none; }
     .player-head { display: flex; gap: 13px; align-items: center; }
     .number {
@@ -104,7 +108,7 @@
     .player-meta { margin-top: 3px; color: var(--muted); font-size: .86rem; }
     .chevron { color: var(--accent); font-size: 1.1rem; transition: transform .15s; }
     details[open] .chevron { transform: rotate(180deg); }
-    .quick-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px; margin-top: 16px; }
+    .quick-stats { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; margin-top: 16px; }
     .stat {
       min-width: 0; text-align: center; padding: 9px 4px;
       border-radius: 9px; background: var(--surface-2);
@@ -114,6 +118,7 @@
     .player-body { border-top: 1px solid var(--line); padding: 15px 17px 17px; }
     .section-label { color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 10px; }
     .stat-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .stat-table td { vertical-align: top; }
     .stat-table td { padding: 7px 0; border-bottom: 1px solid rgba(44,60,76,.7); }
     .stat-table td:first-child { color: var(--muted); padding-right: 10px; }
     .stat-table td:last-child { text-align: right; font-weight: 750; overflow-wrap: anywhere; }
@@ -125,14 +130,16 @@
     .error { color: #ffd0d0; border-color: #814949; }
     footer { border-top: 1px solid var(--line); padding: 22px 0; color: var(--muted); font-size: .84rem; }
     footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 900px) {
+      .quick-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
     @media (max-width: 620px) {
       .wrap { width: min(100% - 22px, 1180px); }
       .topbar { padding: 16px 0; gap: 12px; }
       .logo, .logo-fallback { width: 58px; height: 58px; flex-basis: 58px; }
       .toolbar { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .grid { grid-template-columns: 1fr; }
+      .quick-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
       .intro { display: block; }
       .status { text-align: left; margin-top: 8px; }
     }
@@ -183,14 +190,26 @@
       <div class="summary-card"><span>Total points</span><strong id="totalPoints">—</strong></div>
     </section>
 
-    <section id="roster" class="grid" aria-label="Player cards"></section>
+    <section id="roster16" class="roster-section" aria-labelledby="heading16">
+      <h2 id="heading16">16U Roster <span class="section-count" id="count16"></span></h2>
+      <div id="grid16" class="grid" aria-label="16U player cards"></div>
+    </section>
+    <section id="roster19" class="roster-section" aria-labelledby="heading19">
+      <h2 id="heading19">19U Roster <span class="section-count" id="count19"></span></h2>
+      <div id="grid19" class="grid" aria-label="19U player cards"></div>
+    </section>
+    <section id="unassignedSection" class="roster-section" hidden aria-labelledby="headingUnassigned">
+      <h2 id="headingUnassigned">Roster not identified <span class="section-count" id="countUnassigned"></span></h2>
+      <p class="subtitle">These players did not have a recognizable 16U or 19U roster value in the CSV. Add a roster/team/age-group column value to place them in the correct section.</p>
+      <div id="gridUnassigned" class="grid" aria-label="Players without a roster assignment"></div>
+    </section>
     <div id="message" hidden></div>
   </main>
 
   <footer>
     <div class="wrap">
       <span>Rocky Mountain Moose · Moose Stats</span>
-      <span>Stats Verification: Rocky Mountain Moose Hockey Club</span>
+      <span>Stats source: published team spreadsheet</span>
     </div>
   </footer>
 
@@ -198,7 +217,6 @@
     // Published Google Sheets CSV feed. The sheet must be published to the web.
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWJPgIwaKz7oWWQew4njSI9wm-Y0QuKbqxBPbEWoilm31nOSgacolofCaXciIETk2Hw5nSjPhKDbPv/pub?output=csv";
 
-    const rosterEl = document.getElementById("roster");
     const statusEl = document.getElementById("status");
     const messageEl = document.getElementById("message");
     const searchEl = document.getElementById("search");
@@ -249,13 +267,23 @@
       last: ["lastname", "last", "surname"],
       number: ["number", "jerseynumber", "jersey", "no", "playernumber", "sweaternumber"],
       position: ["position", "pos", "playerposition"],
-      team: ["team", "squad"],
+      team: ["team", "squad", "roster", "agegroup", "division", "level", "program", "teamname"],
+      roster: ["roster", "agegroup", "division", "level", "team", "squad", "program", "teamname"],
+      birthYear: ["birthyear", "yearofbirth", "yob", "born", "birthyr"],
       games: ["games", "gp", "gamesplayed"],
       goals: ["goals", "g"],
       assists: ["assists", "a"],
       points: ["points", "pts", "p"],
       plusMinus: ["plusminus", "plusmin", "+minus", "pm"],
-      shots: ["shots", "sog", "shotsongoal"],
+      shots: ["shots", "sog", "shotsongoal", "shotsonnet"],
+      shotAttempts: ["shotattempts", "shotattempt", "attempts", "totalshotattempts"],
+      hits: ["hits", "hit"],
+      blockedShots: ["blockedshots", "blockedshot", "shotsblocked", "blocks"],
+      faceoffs: ["faceoffs", "faceoff", "faceoffwins", "fow", "fo"],
+      faceoffPct: ["faceoffpct", "faceoffpercentage", "faceoffpercent", "fopct", "fo pct", "fo%"],
+      passes: ["passes", "pass", "passattempts", "totalpasses"],
+      passPct: ["passpct", "passpercentage", "passpercent", "passingpct", "passingpercentage"],
+      turnoverRatio: ["turnoverratio", "turnoversratio", "turnoverrate", "turnoverpct", "turnovers"],
       pim: ["pim", "penaltyminutes", "penalties"],
       wins: ["wins", "w"],
       losses: ["losses", "l"],
@@ -315,17 +343,31 @@
           const last = valueAt(row, headers, "last");
           name = [first, last].filter(Boolean).join(" ");
         }
+        const team = valueAt(row, headers, "team");
+        const rosterValue = valueAt(row, headers, "roster") || team;
         return {
           raw: row,
           headers,
           name,
           number: valueAt(row, headers, "number"),
+          birthYear: valueAt(row, headers, "birthYear"),
           position: valueAt(row, headers, "position"),
-          team: valueAt(row, headers, "team"),
+          team,
+          rosterValue,
           games: valueAt(row, headers, "games"),
           goals: valueAt(row, headers, "goals"),
           assists: valueAt(row, headers, "assists"),
           points: valueAt(row, headers, "points"),
+          plusMinus: valueAt(row, headers, "plusMinus"),
+          shots: valueAt(row, headers, "shots"),
+          shotAttempts: valueAt(row, headers, "shotAttempts"),
+          hits: valueAt(row, headers, "hits"),
+          blockedShots: valueAt(row, headers, "blockedShots"),
+          faceoffs: valueAt(row, headers, "faceoffs"),
+          faceoffPct: valueAt(row, headers, "faceoffPct"),
+          passes: valueAt(row, headers, "passes"),
+          passPct: valueAt(row, headers, "passPct"),
+          turnoverRatio: valueAt(row, headers, "turnoverRatio"),
           photo: valueAt(row, headers, "photo"),
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
@@ -337,15 +379,41 @@
       return `<div class="stat"><b>${escapeHTML(value || "—")}</b><span>${escapeHTML(label)}</span></div>`;
     }
 
-    function cardHTML(p) {
-      const meta = [p.position, p.team].filter(Boolean).join(" · ") || "Player";
-      const quick = [
-        ["GP", p.games], ["G", p.goals], ["A", p.assists], ["PTS", p.points]
-      ].map(([label, val]) => statTile(label, val)).join("");
+    const displayStats = [
+      ["Number", "number"],
+      ["Birth Year", "birthYear"],
+      ["Games Played", "games"],
+      ["Goals", "goals"],
+      ["Assists", "assists"],
+      ["Points", "points"],
+      ["Plus/Minus", "plusMinus"],
+      ["Shots", "shots"],
+      ["Shot Attempts", "shotAttempts"],
+      ["Hits", "hits"],
+      ["Blocked Shots", "blockedShots"],
+      ["Faceoffs", "faceoffs"],
+      ["Faceoff %", "faceoffPct"],
+      ["Passes", "passes"],
+      ["Pass%", "passPct"],
+      ["Turnover Ratio", "turnoverRatio"]
+    ];
 
-      // Show all non-empty CSV columns in the expanded section, preserving custom stats.
-      const details = p.stats.map(s =>
-        `<tr><td>${escapeHTML(s.label)}</td><td>${escapeHTML(s.value)}</td></tr>`
+    function rosterGroup(p) {
+      const hint = String(p.rosterValue || "").toLowerCase().replace(/\s+/g, "");
+      if (/19u|u19|19under|under19|19andunder/.test(hint)) return "19U";
+      if (/16u|u16|16under|under16|16andunder/.test(hint)) return "16U";
+      // Also accept roster identifiers in other CSV columns, such as a division or team field.
+      const rowText = [p.team, p.position, ...p.stats.map(s => s.value)].join(" ").toLowerCase().replace(/\s+/g, "");
+      if (/19u|u19|19under|under19|19andunder/.test(rowText)) return "19U";
+      if (/16u|u16|16under|under16|16andunder/.test(rowText)) return "16U";
+      return "Unassigned";
+    }
+
+    function cardHTML(p) {
+      const meta = [p.position, p.team && p.team !== p.rosterValue ? p.team : ""].filter(Boolean).join(" · ") || "Player";
+      const quick = displayStats.slice(0, 6).map(([label, key]) => statTile(label, p[key])).join("");
+      const details = displayStats.map(([label, key]) =>
+        `<tr><td>${escapeHTML(label)}</td><td>${escapeHTML(p[key] || "—")}</td></tr>`
       ).join("");
 
       return `<details class="player">
@@ -358,9 +426,7 @@
             </div>
             <span class="chevron" aria-hidden="true">⌄</span>
           </div>
-          <div class="quick-stats">
-            ${quick}
-          </div>
+          <div class="quick-stats">${quick}</div>
         </summary>
         <div class="player-body">
           <p class="section-label">Player statistics</p>
@@ -375,8 +441,8 @@
       const sort = sortEl.value;
 
       let filtered = players.filter(p => {
-        const searchText = [p.name, p.number, p.position, p.team, ...p.stats.map(s => s.value)]
-          .join(" ").toLowerCase();
+        const searchText = [p.name, p.number, p.birthYear, p.position, p.team, p.rosterValue,
+          ...displayStats.map(([, key]) => p[key])].join(" ").toLowerCase();
         return searchText.includes(query) && (!position || p.position === position);
       });
 
@@ -388,18 +454,23 @@
         return a.name.localeCompare(b.name);
       });
 
-      rosterEl.innerHTML = filtered.map(cardHTML).join("");
-      document.getElementById("totalPlayers").textContent = filtered.length;
-      document.getElementById("totalGoals").textContent =
-        filtered.reduce((sum, p) => sum + num(p.goals), 0);
-      document.getElementById("totalAssists").textContent =
-        filtered.reduce((sum, p) => sum + num(p.assists), 0);
-      document.getElementById("totalPoints").textContent =
-        filtered.reduce((sum, p) => sum + num(p.points), 0);
+      const grouped = {
+        "16U": filtered.filter(p => rosterGroup(p) === "16U"),
+        "19U": filtered.filter(p => rosterGroup(p) === "19U"),
+        "Unassigned": filtered.filter(p => rosterGroup(p) === "Unassigned")
+      };
+      document.getElementById("grid16").innerHTML = grouped["16U"].map(cardHTML).join("") || '<div class="empty">No 16U players match the current filters.</div>';
+      document.getElementById("grid19").innerHTML = grouped["19U"].map(cardHTML).join("") || '<div class="empty">No 19U players match the current filters.</div>';
+      document.getElementById("gridUnassigned").innerHTML = grouped.Unassigned.map(cardHTML).join("");
+      document.getElementById("unassignedSection").hidden = grouped.Unassigned.length === 0;
+      document.getElementById("count16").textContent = `(${grouped["16U"].length})`;
+      document.getElementById("count19").textContent = `(${grouped["19U"].length})`;
+      document.getElementById("countUnassigned").textContent = `(${grouped.Unassigned.length})`;
 
-      if (!filtered.length) {
-        rosterEl.innerHTML = `<div class="empty" style="grid-column:1/-1">No players match those filters.</div>`;
-      }
+      document.getElementById("totalPlayers").textContent = filtered.length;
+      document.getElementById("totalGoals").textContent = filtered.reduce((sum, p) => sum + num(p.goals), 0);
+      document.getElementById("totalAssists").textContent = filtered.reduce((sum, p) => sum + num(p.assists), 0);
+      document.getElementById("totalPoints").textContent = filtered.reduce((sum, p) => sum + num(p.points), 0);
       statusEl.textContent = `${filtered.length} player${filtered.length === 1 ? "" : "s"} shown`;
     }
 
@@ -433,7 +504,9 @@
         messageEl.hidden = false;
         messageEl.textContent = error.message +
           " If the browser console reports a CORS or network error, verify the published CSV URL and spreadsheet sharing settings.";
-        rosterEl.innerHTML = "";
+        document.getElementById("grid16").innerHTML = "";
+        document.getElementById("grid19").innerHTML = "";
+        document.getElementById("gridUnassigned").innerHTML = "";
         ["totalPlayers", "totalGoals", "totalAssists", "totalPoints"].forEach(id => {
           document.getElementById(id).textContent = "—";
         });
