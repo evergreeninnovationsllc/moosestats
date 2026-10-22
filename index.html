@@ -1,148 +1,449 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rocky Mountain Moose | Player Stats</title>
-<style>
-:root{
-  --bg:#080d14; --panel:#111a26; --panel2:#172333; --line:#2a394b;
-  --text:#f4f7fb; --muted:#a7b4c5; --accent:#d72e3f; --accent2:#ff5262;
-  --good:#8bd3b0; --radius:16px;
-}
-*{box-sizing:border-box}
-body{margin:0;background:radial-gradient(ellipse at top,#152336 0%,var(--bg) 55%);color:var(--text);
-  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.45}
-.shell{max-width:1120px;margin:0 auto;padding:36px 20px 60px}
-.topline{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase}
-.mark{width:10px;height:10px;background:var(--accent);border-radius:2px;box-shadow:0 0 18px #d72e3f80}
-h1{font-size:clamp(2rem,5vw,3.6rem);line-height:1.02;letter-spacing:-.04em;margin:16px 0 10px}
-.lead{color:var(--muted);max-width:650px;margin:0 0 28px}
-.toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 18px}
-.search{flex:1;min-width:210px;background:#0d1520;border:1px solid var(--line);color:var(--text);padding:13px 15px;border-radius:11px;font:inherit;outline:none}
-.search:focus{border-color:var(--accent2);box-shadow:0 0 0 3px #d72e3f25}
-.filter{background:#0d1520;border:1px solid var(--line);color:var(--text);padding:12px;border-radius:11px;font:inherit}
-.summary{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:.88rem;margin:0 2px 10px}
-.roster{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#0d141e}
-.roster-head,.player-row{display:grid;grid-template-columns:70px minmax(180px,1.6fr) minmax(65px,.5fr) repeat(3,minmax(58px,.55fr)) 28px;align-items:center;gap:12px}
-.roster-head{padding:12px 18px;background:#121d2a;color:#8292a6;font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.player{border-top:1px solid #202d3c}
-.player:first-of-type{border-top:0}
-.player-row{padding:13px 18px;cursor:pointer;transition:background .15s;outline:none}
-.player-row:hover,.player-row:focus-visible{background:#152234}
-.player-row[aria-expanded="true"]{background:#192638}
-.number{font-weight:800;color:#93a4b8;font-variant-numeric:tabular-nums}
-.identity{display:flex;align-items:center;gap:12px;min-width:0}
-.avatar{width:44px;height:44px;flex:0 0 44px;border-radius:50%;object-fit:cover;background:linear-gradient(145deg,#26384d,#111a26);border:1px solid #3b4b5f}
-.avatar-fallback{display:grid;place-items:center;font-weight:900;color:#e3eaf3}
-.name{font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sub{font-size:.77rem;color:var(--muted);margin-top:2px}
-.pos{font-size:.8rem;color:#c9d4e2;background:#1c2a3b;border:1px solid #2b3b4e;border-radius:6px;padding:4px 7px;justify-self:start}
-.stat{font-variant-numeric:tabular-nums;font-weight:650}
-.chevron{color:#9eacbc;transition:transform .2s;font-size:1.15rem;text-align:center}
-.player-row[aria-expanded="true"] .chevron{transform:rotate(180deg);color:var(--accent2)}
-.details{padding:0 18px 20px;background:linear-gradient(180deg,#192638,#111a26);border-top:1px solid #28394c}
-.details-inner{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,2fr);gap:22px;padding-top:20px}
-.profile{display:flex;gap:15px;align-items:flex-start}
-.profile-photo{width:104px;height:124px;border-radius:12px;object-fit:cover;background:#26384d;border:1px solid #3a4b60}
-.profile h2{font-size:1.45rem;margin:2px 0 4px;line-height:1.1}
-.meta{font-size:.86rem;color:var(--muted);margin:0 0 8px}
-.bio{color:#d4dce7;font-size:.9rem;margin:12px 0 0}
-.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.pill{border:1px solid #34465a;background:#101a27;color:#c4cfdd;border-radius:7px;padding:5px 8px;font-size:.76rem}
-.stat-section h3{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:#9fadc0;margin:0 0 10px}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(82px,1fr));gap:8px}
-.stat-card{background:#0e1722;border:1px solid #29394c;border-radius:10px;padding:11px 12px;min-width:0}
-.stat-label{color:#94a4b7;text-transform:uppercase;letter-spacing:.08em;font-size:.68rem;font-weight:800}
-.stat-value{font-size:1.35rem;font-weight:850;letter-spacing:-.03em;margin-top:3px;overflow-wrap:anywhere}
-.stat-block+.stat-block{margin-top:18px}
-.empty{padding:35px 20px;text-align:center;color:var(--muted)}
-.footer{margin-top:16px;color:#74859a;font-size:.75rem;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-@media(max-width:720px){
- .shell{padding:26px 12px 40px}.roster-head{display:none}
- .roster{border-radius:12px}
- .player-row{grid-template-columns:38px minmax(0,1fr) 42px 26px;gap:9px;padding:12px}
- .player-row .hide-mobile{display:none}
- .avatar{width:40px;height:40px;flex-basis:40px}
- .details{padding:0 12px 16px}.details-inner{grid-template-columns:1fr;gap:18px}
- .profile-photo{width:82px;height:100px}
- .summary{font-size:.8rem}
-}
-@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>Moose Stats | Rocky Mountain Moose</title>
+  <style>
+    :root {
+      /* Moose-inspired palette. Adjust these values to match the official uniforms/site exactly. */
+      --bg: #0b1118;
+      --surface: #141e29;
+      --surface-2: #1b2937;
+      --line: #2c3c4c;
+      --text: #f5f7fa;
+      --muted: #a9b8c7;
+      --accent: #39a9ff;
+      --accent-2: #d9efff;
+      --good: #7be0b2;
+      --shadow: 0 14px 34px rgba(0,0,0,.24);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(ellipse at top, rgba(57,169,255,.12), transparent 45%),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    a { color: var(--accent-2); }
+    .wrap { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(11,17,24,.92);
+    }
+    .topbar {
+      display: flex; align-items: center; gap: 18px;
+      padding: 22px 0;
+    }
+    .logo {
+      width: 76px; height: 76px; flex: 0 0 76px;
+      object-fit: contain; border-radius: 12px;
+      background: #fff; padding: 5px;
+    }
+    .logo-fallback {
+      width: 76px; height: 76px; flex: 0 0 76px;
+      display: grid; place-items: center; border-radius: 12px;
+      background: var(--surface-2); border: 1px solid var(--line);
+      color: var(--accent); font-size: 30px; font-weight: 900;
+    }
+    .brand-kicker { color: var(--accent); text-transform: uppercase; font-size: .76rem; font-weight: 800; letter-spacing: .16em; }
+    h1 { margin: 2px 0 0; font-size: clamp(1.7rem, 4vw, 2.65rem); line-height: 1.12; letter-spacing: -.04em; }
+    .subtitle { margin: 6px 0 0; color: var(--muted); }
+    main { padding: 28px 0 54px; }
+    .intro { display: flex; justify-content: space-between; gap: 18px; align-items: end; margin-bottom: 22px; }
+    .intro h2 { margin: 0; font-size: 1.45rem; }
+    .intro p { margin: 5px 0 0; color: var(--muted); }
+    .status { color: var(--muted); font-size: .88rem; text-align: right; }
+    .toolbar {
+      display: grid; grid-template-columns: minmax(220px, 2fr) minmax(160px, 1fr) minmax(150px, 1fr);
+      gap: 12px; margin-bottom: 18px;
+    }
+    input, select {
+      width: 100%; min-height: 46px; padding: 11px 13px;
+      color: var(--text); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 10px;
+      font: inherit; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(57,169,255,.15); }
+    .summary {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px; margin: 18px 0 22px;
+    }
+    .summary-card {
+      padding: 15px 17px; background: linear-gradient(145deg, var(--surface), #101923);
+      border: 1px solid var(--line); border-radius: 14px;
+    }
+    .summary-card span { display: block; color: var(--muted); font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+    .summary-card strong { display: block; margin-top: 3px; font-size: 1.65rem; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+    details.player {
+      align-self: start; overflow: hidden;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 15px; box-shadow: var(--shadow);
+      transition: border-color .15s, transform .15s;
+    }
+    details.player[open] { border-color: rgba(57,169,255,.75); }
+    details.player summary {
+      list-style: none; cursor: pointer; padding: 17px;
+    }
+    details.player summary::-webkit-details-marker { display: none; }
+    .player-head { display: flex; gap: 13px; align-items: center; }
+    .number {
+      display: grid; place-items: center; flex: 0 0 58px; height: 58px;
+      border-radius: 12px; background: var(--surface-2);
+      border: 1px solid var(--line); color: var(--accent);
+      font-size: 1.35rem; font-weight: 900;
+    }
+    .player-name { min-width: 0; flex: 1; }
+    .player-name h3 { margin: 0; font-size: 1.04rem; overflow-wrap: anywhere; }
+    .player-meta { margin-top: 3px; color: var(--muted); font-size: .86rem; }
+    .chevron { color: var(--accent); font-size: 1.1rem; transition: transform .15s; }
+    details[open] .chevron { transform: rotate(180deg); }
+    .quick-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px; margin-top: 16px; }
+    .stat {
+      min-width: 0; text-align: center; padding: 9px 4px;
+      border-radius: 9px; background: var(--surface-2);
+    }
+    .stat b { display: block; font-size: 1.12rem; overflow-wrap: anywhere; }
+    .stat span { display: block; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+    .player-body { border-top: 1px solid var(--line); padding: 15px 17px 17px; }
+    .section-label { color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 10px; }
+    .stat-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .stat-table td { padding: 7px 0; border-bottom: 1px solid rgba(44,60,76,.7); }
+    .stat-table td:first-child { color: var(--muted); padding-right: 10px; }
+    .stat-table td:last-child { text-align: right; font-weight: 750; overflow-wrap: anywhere; }
+    .stat-table tr:last-child td { border-bottom: 0; }
+    .empty, .error {
+      padding: 24px; background: var(--surface); border: 1px solid var(--line);
+      border-radius: 14px; color: var(--muted); text-align: center;
+    }
+    .error { color: #ffd0d0; border-color: #814949; }
+    footer { border-top: 1px solid var(--line); padding: 22px 0; color: var(--muted); font-size: .84rem; }
+    footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 620px) {
+      .wrap { width: min(100% - 22px, 1180px); }
+      .topbar { padding: 16px 0; gap: 12px; }
+      .logo, .logo-fallback { width: 58px; height: 58px; flex-basis: 58px; }
+      .toolbar { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .grid { grid-template-columns: 1fr; }
+      .intro { display: block; }
+      .status { text-align: left; margin-top: 8px; }
+    }
+  </style>
 </head>
 <body>
-<main class="shell">
-  <div class="topline"><span class="mark"></span><span id="teamLabel">ROCKY MOUNTAIN MOOSE</span></div>
-  <h1>16U <span style="color:var(--accent2)">STATS</span></h1>
-  <p class="lead" id="intro">Meet the players. Select a name to explore player bios and statistics.</p>
-  <div class="toolbar">
-    <input class="search" id="search" type="search" placeholder="Search player, number, or position…" aria-label="Search players">
-    <select class="filter" id="positionFilter" aria-label="Filter by position">
-      <option value="">All positions</option><option value="F">Forwards</option><option value="D">Defense</option><option value="G">Goalies</option>
-    </select>
-  </div>
-  <div class="summary"><span id="count">Loading roster…</span><span>SELECT A PLAYER TO EXPAND <span style="color:var(--accent2)">↘</span></span></div>
-  <section class="roster" id="roster" aria-label="Player roster"></section>
-  <div class="footer"><span>PLAYER PROFILES · SEASON & CAREER STATS</span><span>Replace sample data with your roster in <code>players.json</code></span></div>
-</main>
-<script>
-const fallbackPlayers = [
- {id:"player-1",number:9,name:"Alex Morgan",position:"F",shoots:"L",height:"6'0\"",weight:"185 lb",hometown:"Denver, CO",photo:"",bio:"Two-way forward known for pace, puck protection, and a strong work ethic.",season:{GP:42,G:18,A:24,PTS:42,PIM:16,SOG:112},career:{GP:78,G:29,A:41,PTS:70,PIM:30}},
- {id:"player-2",number:31,name:"Jordan Lee",position:"G",shoots:"L",height:"6'2\"",weight:"190 lb",hometown:"Madison, WI",photo:"",bio:"Competitive goaltender with quick lateral movement and calm rebound control.",season:{GP:25,W:15,L:7,OTL:3,"SV%":".918",GAA:"2.41"},career:{GP:41,W:24,L:12,OTL:5,"SV%":".914",GAA:"2.56"}},
- {id:"player-3",number:17,name:"Sam Taylor",position:"D",shoots:"R",height:"6'1\"",weight:"195 lb",hometown:"Boise, ID",photo:"",bio:"Mobile defenseman who moves the puck efficiently and contributes on special teams.",season:{GP:40,G:6,A:19,PTS:25,PIM:28,"+/-":"+12",SOG:74},career:{GP:72,G:10,A:31,PTS:41,PIM:44,"+/-":"+18"}}
-];
-let players = fallbackPlayers;
-let openId = null;
-const $ = id => document.getElementById(id);
-const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-const initials = name => String(name || "?").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
-function avatarMarkup(player, extraClass="avatar"){
-  const name = escapeHtml(player.name || "Player");
-  if(player.photo) return `<img class="${extraClass}" src="${escapeHtml(player.photo)}" alt="${name}" loading="lazy" onerror="this.onerror=null;this.outerHTML='<div class=&quot;${extraClass} avatar-fallback&quot; aria-label=&quot;No photo available&quot;>${escapeHtml(initials(player.name))}</div>'">`;
-  return `<div class="${extraClass} avatar-fallback" aria-label="No photo available">${escapeHtml(initials(player.name))}</div>`;
-}
-function statCards(stats){
-  if(!stats || !Object.keys(stats).length) return '<p class="meta">No stats entered yet.</p>';
-  return `<div class="stat-grid">${Object.entries(stats).map(([key,val])=>`<div class="stat-card"><div class="stat-label">${escapeHtml(key)}</div><div class="stat-value">${escapeHtml(val)}</div></div>`).join("")}</div>`;
-}
-function playerDetails(p){
-  const bio = p.bio ? `<p class="bio">${escapeHtml(p.bio)}</p>` : '<p class="bio">Player bio coming soon.</p>';
-  const pills = [["Shoots",p.shoots],["Height",p.height],["Weight",p.weight],["Hometown",p.hometown]].filter(x=>x[1]).map(([k,v])=>`<span class="pill">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join("");
-  return `<div class="details" id="details-${escapeHtml(p.id)}"><div class="details-inner">
-    <div><div class="profile">${avatarMarkup(p,"profile-photo")}<div><h2>${escapeHtml(p.name)}</h2><p class="meta">#${escapeHtml(p.number)} · ${escapeHtml(p.position || "—")}</p><p class="meta">${escapeHtml(p.hometown || "Hometown not entered")}</p></div></div>${bio}<div class="pills">${pills}</div></div>
-    <div><div class="stat-block"><h3>Season statistics</h3>${statCards(p.season)}</div><div class="stat-block"><h3>Career statistics</h3>${statCards(p.career)}</div></div>
-  </div></div>`;
-}
-function render(){
-  const query = $("search").value.trim().toLowerCase();
-  const pos = $("positionFilter").value;
-  const filtered = players.filter(p => (!pos || p.position===pos) && [p.name,p.number,p.position,p.hometown].some(v=>String(v??"").toLowerCase().includes(query)));
-  $("count").textContent = `${filtered.length} player${filtered.length===1?"":"s"} shown · ${players.length} total`;
-  if(!filtered.length){$("roster").innerHTML='<div class="empty">No players match that search. Try another name or position.</div>';return;}
-  $("roster").innerHTML = `<div class="roster-head"><span>#</span><span>Player</span><span>Pos</span><span>GP</span><span>G</span><span>PTS</span><span></span></div>` + filtered.map(p=>{
-    const expanded = openId===p.id;
-    const s = p.season || {};
-    return `<article class="player">
-      <div class="player-row" role="button" tabindex="0" aria-expanded="${expanded}" aria-controls="details-${escapeHtml(p.id)}" data-player="${escapeHtml(p.id)}">
-        <span class="number">${escapeHtml(p.number ?? "—")}</span>
-        <span class="identity">${avatarMarkup(p)}<span style="min-width:0"><span class="name">${escapeHtml(p.name)}</span><span class="sub">${escapeHtml(p.hometown || "Player profile")}</span></span></span>
-        <span class="pos">${escapeHtml(p.position || "—")}</span>
-        <span class="stat hide-mobile">${escapeHtml(s.GP ?? "—")}</span>
-        <span class="stat hide-mobile">${escapeHtml(s.G ?? "—")}</span>
-        <span class="stat hide-mobile">${escapeHtml(s.PTS ?? "—")}</span>
-        <span class="chevron" aria-hidden="true">⌄</span>
+  <header>
+    <div class="wrap topbar">
+      <!-- Optional: put the official logo file in this repository and set its path below. -->
+      <img id="teamLogo" class="logo" src="moose-logo.png" alt="Rocky Mountain Moose logo"
+           onerror="this.hidden=true;document.getElementById('logoFallback').hidden=false">
+      <div id="logoFallback" class="logo-fallback" hidden aria-hidden="true">M</div>
+      <div>
+        <div class="brand-kicker">Rocky Mountain Moose</div>
+        <h1>Moose Stats</h1>
+        <p class="subtitle">Player roster &amp; season statistics</p>
       </div>
-      ${expanded ? playerDetails(p) : ""}
-    </article>`;
-  }).join("");
-}
-function togglePlayer(id){openId = openId===id ? null : id;render();}
-$("roster").addEventListener("click",e=>{const row=e.target.closest("[data-player]");if(row)togglePlayer(row.dataset.player);});
-$("roster").addEventListener("keydown",e=>{const row=e.target.closest("[data-player]");if(row&&(e.key==="Enter"||e.key===" ")){e.preventDefault();togglePlayer(row.dataset.player);}});
-$("search").addEventListener("input",render);
-$("positionFilter").addEventListener("change",render);
-fetch("./players.json").then(r=>{if(!r.ok)throw Error("No external roster file");return r.json();}).then(data=>{if(Array.isArray(data)){players=data;render();}}).catch(()=>render());
-</script>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro">
+      <div>
+        <h2>Player Roster</h2>
+        <p>Select a player card to expand their stats.</p>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite">Loading roster…</div>
+    </section>
+
+    <section class="toolbar" aria-label="Roster filters">
+      <input id="search" type="search" placeholder="Search players…" aria-label="Search players">
+      <select id="positionFilter" aria-label="Filter by position">
+        <option value="">All positions</option>
+      </select>
+      <select id="sortBy" aria-label="Sort players">
+        <option value="name">Sort: Name</option>
+        <option value="number">Sort: Jersey number</option>
+        <option value="points">Sort: Points</option>
+        <option value="goals">Sort: Goals</option>
+        <option value="assists">Sort: Assists</option>
+      </select>
+    </section>
+
+    <section class="summary" aria-label="Roster summary">
+      <div class="summary-card"><span>Players shown</span><strong id="totalPlayers">—</strong></div>
+      <div class="summary-card"><span>Total goals</span><strong id="totalGoals">—</strong></div>
+      <div class="summary-card"><span>Total assists</span><strong id="totalAssists">—</strong></div>
+      <div class="summary-card"><span>Total points</span><strong id="totalPoints">—</strong></div>
+    </section>
+
+    <section id="roster" class="grid" aria-label="Player cards"></section>
+    <div id="message" hidden></div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Rocky Mountain Moose · Moose Stats</span>
+      <span>Stats source: published team spreadsheet</span>
+    </div>
+  </footer>
+
+  <script>
+    // Published Google Sheets CSV feed. The sheet must be published to the web.
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSWJPgIwaKz7oWWQew4njSI9wm-Y0QuKbqxBPbEWoilm31nOSgacolofCaXciIETk2Hw5nSjPhKDbPv/pub?output=csv";
+
+    const rosterEl = document.getElementById("roster");
+    const statusEl = document.getElementById("status");
+    const messageEl = document.getElementById("message");
+    const searchEl = document.getElementById("search");
+    const positionEl = document.getElementById("positionFilter");
+    const sortEl = document.getElementById("sortBy");
+
+    let players = [];
+
+    function normalize(value) {
+      return String(value ?? "")
+        .replace(/^\uFEFF/, "")
+        .trim()
+        .toLowerCase()
+        .replace(/[%]/g, " pct ")
+        .replace(/[^a-z0-9]+/g, "");
+    }
+
+    // Handles quoted CSV fields, commas inside quotes, and escaped double quotes.
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], cell = "", quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '"') {
+          if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+          else quoted = !quoted;
+        } else if (ch === "," && !quoted) {
+          row.push(cell); cell = "";
+        } else if ((ch === "\n" || ch === "\r") && !quoted) {
+          if (ch === "\r" && text[i + 1] === "\n") i++;
+          row.push(cell);
+          if (row.some(v => String(v).trim() !== "")) rows.push(row);
+          row = []; cell = "";
+        } else {
+          cell += ch;
+        }
+      }
+      if (cell.length || row.length) {
+        row.push(cell);
+        if (row.some(v => String(v).trim() !== "")) rows.push(row);
+      }
+      return rows;
+    }
+
+    const aliases = {
+      name: ["player", "playername", "name", "fullname", "athlete"],
+      first: ["firstname", "first"],
+      last: ["lastname", "last", "surname"],
+      number: ["number", "jerseynumber", "jersey", "no", "playernumber", "sweaternumber"],
+      position: ["position", "pos", "playerposition"],
+      team: ["team", "squad"],
+      games: ["games", "gp", "gamesplayed"],
+      goals: ["goals", "g"],
+      assists: ["assists", "a"],
+      points: ["points", "pts", "p"],
+      plusMinus: ["plusminus", "plusmin", "+minus", "pm"],
+      shots: ["shots", "sog", "shotsongoal"],
+      pim: ["pim", "penaltyminutes", "penalties"],
+      wins: ["wins", "w"],
+      losses: ["losses", "l"],
+      gaa: ["gaa", "goalsagainstaverage"],
+      savePct: ["savepct", "savepercentage", "svpct", "svpct", "savespercentage"],
+      saves: ["saves", "sv"],
+      shutouts: ["shutouts", "sho"],
+      height: ["height"],
+      weight: ["weight"],
+      birthdate: ["birthdate", "dob", "dateofbirth"],
+      shoots: ["shoots", "shot", "handedness"],
+      hometown: ["hometown", "home"],
+      age: ["age"],
+      school: ["school"],
+      photo: ["photo", "photourl", "image", "imageurl", "headshot", "headshoturl"]
+    };
+
+    function findColumn(headers, key) {
+      const choices = aliases[key] || [key];
+      for (const alias of choices) {
+        const index = headers.findIndex(h => normalize(h) === normalize(alias));
+        if (index >= 0) return index;
+      }
+      // Support headers like "Player Goals" or "Season Assists".
+      for (const alias of choices) {
+        const index = headers.findIndex(h => normalize(h).includes(normalize(alias)));
+        if (index >= 0) return index;
+      }
+      return -1;
+    }
+
+    function valueAt(row, headers, key) {
+      const index = findColumn(headers, key);
+      return index >= 0 ? String(row[index] ?? "").trim() : "";
+    }
+
+    function num(value) {
+      const cleaned = String(value ?? "").replace(/,/g, "").replace(/%$/, "").trim();
+      const parsed = Number(cleaned);
+      return cleaned !== "" && Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function makePlayers(rows) {
+      if (!rows.length) return [];
+      const headers = rows[0].map(h => String(h).trim());
+      const dataRows = rows.slice(1);
+      return dataRows.map(row => {
+        let name = valueAt(row, headers, "name");
+        if (!name) {
+          const first = valueAt(row, headers, "first");
+          const last = valueAt(row, headers, "last");
+          name = [first, last].filter(Boolean).join(" ");
+        }
+        return {
+          raw: row,
+          headers,
+          name,
+          number: valueAt(row, headers, "number"),
+          position: valueAt(row, headers, "position"),
+          team: valueAt(row, headers, "team"),
+          games: valueAt(row, headers, "games"),
+          goals: valueAt(row, headers, "goals"),
+          assists: valueAt(row, headers, "assists"),
+          points: valueAt(row, headers, "points"),
+          photo: valueAt(row, headers, "photo"),
+          stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
+            .filter(item => item.label && item.value)
+        };
+      }).filter(p => p.name);
+    }
+
+    function statTile(label, value) {
+      return `<div class="stat"><b>${escapeHTML(value || "—")}</b><span>${escapeHTML(label)}</span></div>`;
+    }
+
+    function cardHTML(p) {
+      const meta = [p.position, p.team].filter(Boolean).join(" · ") || "Player";
+      const quick = [
+        ["GP", p.games], ["G", p.goals], ["A", p.assists], ["PTS", p.points]
+      ].map(([label, val]) => statTile(label, val)).join("");
+
+      // Show all non-empty CSV columns in the expanded section, preserving custom stats.
+      const details = p.stats.map(s =>
+        `<tr><td>${escapeHTML(s.label)}</td><td>${escapeHTML(s.value)}</td></tr>`
+      ).join("");
+
+      return `<details class="player">
+        <summary>
+          <div class="player-head">
+            <div class="number">${escapeHTML(p.number || "—")}</div>
+            <div class="player-name">
+              <h3>${escapeHTML(p.name)}</h3>
+              <div class="player-meta">${escapeHTML(meta)}</div>
+            </div>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </div>
+          <div class="quick-stats">
+            ${quick}
+          </div>
+        </summary>
+        <div class="player-body">
+          <p class="section-label">Player statistics</p>
+          <table class="stat-table"><tbody>${details}</tbody></table>
+        </div>
+      </details>`;
+    }
+
+    function render() {
+      const query = searchEl.value.trim().toLowerCase();
+      const position = positionEl.value;
+      const sort = sortEl.value;
+
+      let filtered = players.filter(p => {
+        const searchText = [p.name, p.number, p.position, p.team, ...p.stats.map(s => s.value)]
+          .join(" ").toLowerCase();
+        return searchText.includes(query) && (!position || p.position === position);
+      });
+
+      filtered.sort((a, b) => {
+        if (sort === "number") return num(a.number) - num(b.number);
+        if (sort === "goals") return num(b.goals) - num(a.goals);
+        if (sort === "assists") return num(b.assists) - num(a.assists);
+        if (sort === "points") return num(b.points) - num(a.points);
+        return a.name.localeCompare(b.name);
+      });
+
+      rosterEl.innerHTML = filtered.map(cardHTML).join("");
+      document.getElementById("totalPlayers").textContent = filtered.length;
+      document.getElementById("totalGoals").textContent =
+        filtered.reduce((sum, p) => sum + num(p.goals), 0);
+      document.getElementById("totalAssists").textContent =
+        filtered.reduce((sum, p) => sum + num(p.assists), 0);
+      document.getElementById("totalPoints").textContent =
+        filtered.reduce((sum, p) => sum + num(p.points), 0);
+
+      if (!filtered.length) {
+        rosterEl.innerHTML = `<div class="empty" style="grid-column:1/-1">No players match those filters.</div>`;
+      }
+      statusEl.textContent = `${filtered.length} player${filtered.length === 1 ? "" : "s"} shown`;
+    }
+
+    async function loadRoster() {
+      try {
+        statusEl.textContent = "Loading roster…";
+        messageEl.hidden = true;
+        // Cache-busting helps the page pick up recent spreadsheet edits.
+        const response = await fetch(CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "t=" + Date.now());
+        if (!response.ok) throw new Error(`CSV request failed (${response.status})`);
+        const text = await response.text();
+        if (!text.trim() || text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+          throw new Error("The spreadsheet did not return CSV text. Check that it is published to the web as CSV.");
+        }
+        const rows = parseCSV(text);
+        players = makePlayers(rows);
+        if (!players.length) {
+          throw new Error("CSV loaded, but no player names were detected. Check the first-row headers and the player-name column.");
+        }
+
+        const positions = [...new Set(players.map(p => p.position).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b));
+        positionEl.innerHTML = '<option value="">All positions</option>' +
+          positions.map(p => `<option value="${escapeHTML(p)}">${escapeHTML(p)}</option>`).join("");
+
+        render();
+      } catch (error) {
+        console.error("Moose Stats load error:", error);
+        statusEl.textContent = "Roster could not be loaded";
+        messageEl.className = "error";
+        messageEl.hidden = false;
+        messageEl.textContent = error.message +
+          " If the browser console reports a CORS or network error, verify the published CSV URL and spreadsheet sharing settings.";
+        rosterEl.innerHTML = "";
+        ["totalPlayers", "totalGoals", "totalAssists", "totalPoints"].forEach(id => {
+          document.getElementById(id).textContent = "—";
+        });
+      }
+    }
+
+    searchEl.addEventListener("input", render);
+    positionEl.addEventListener("change", render);
+    sortEl.addEventListener("change", render);
+    loadRoster();
+  </script>
 </body>
 </html>
