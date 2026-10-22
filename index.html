@@ -96,33 +96,30 @@
     }
     details.player summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
     details.player summary::-webkit-details-marker { display: none; }
-    .player-head { display: flex; gap: 13px; align-items: center; }
-    .number {
-      display: grid; place-items: center; flex: 0 0 58px; height: 58px;
-      border-radius: 12px; background: var(--surface-2);
-      border: 1px solid var(--line); color: var(--accent);
-      font-size: 1.35rem; font-weight: 900;
+    .player-head { display: flex; gap: 16px; align-items: center; }
+    .player-photo, .player-photo-fallback {
+      width: 132px; height: 132px; flex: 0 0 132px;
+      border-radius: 14px; object-fit: cover; object-position: center;
+      background: var(--surface-2); border: 1px solid var(--line);
+    }
+    .player-photo-fallback {
+      display: grid; place-items: center; color: var(--accent);
+      font-size: 2.2rem; font-weight: 900;
     }
     .player-name { min-width: 0; flex: 1; }
-    .player-name h3 { margin: 0; font-size: 1.04rem; overflow-wrap: anywhere; }
-    .player-meta { margin-top: 3px; color: var(--muted); font-size: .86rem; }
-    .chevron { color: var(--accent); font-size: 1.1rem; transition: transform .15s; }
+    .player-name h3 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+    .player-title-line, .player-meta-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px 12px; }
+    .player-meta-line { margin-top: 5px; color: var(--muted); font-size: .9rem; }
+    .player-number, .player-birth-year { color: var(--accent-2); font-weight: 800; }
+    .player-number { white-space: nowrap; }
+    .chevron { color: var(--accent); font-size: 1.1rem; transition: transform .15s; margin-left: auto; }
     details[open] .chevron { transform: rotate(180deg); }
-    .quick-stats { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; margin-top: 16px; }
-    .stat {
-      min-width: 0; text-align: center; padding: 9px 4px;
-      border-radius: 9px; background: var(--surface-2);
-    }
+    .quick-stats, .expanded-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 16px; }
+    .stat { min-width: 0; text-align: center; padding: 10px 6px; border-radius: 9px; background: var(--surface-2); border: 1px solid rgba(44,60,76,.65); }
     .stat b { display: block; font-size: 1.12rem; overflow-wrap: anywhere; }
     .stat span { display: block; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
     .player-body { border-top: 1px solid var(--line); padding: 15px 17px 17px; }
     .section-label { color: var(--accent); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 10px; }
-    .stat-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    .stat-table td { vertical-align: top; }
-    .stat-table td { padding: 7px 0; border-bottom: 1px solid rgba(44,60,76,.7); }
-    .stat-table td:first-child { color: var(--muted); padding-right: 10px; }
-    .stat-table td:last-child { text-align: right; font-weight: 750; overflow-wrap: anywhere; }
-    .stat-table tr:last-child td { border-bottom: 0; }
     .empty, .error {
       padding: 24px; background: var(--surface); border: 1px solid var(--line);
       border-radius: 14px; color: var(--muted); text-align: center;
@@ -131,7 +128,8 @@
     footer { border-top: 1px solid var(--line); padding: 22px 0; color: var(--muted); font-size: .84rem; }
     footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     @media (max-width: 900px) {
-      .quick-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .quick-stats, .expanded-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .player-photo, .player-photo-fallback { width: 112px; height: 112px; flex-basis: 112px; }
     }
     @media (max-width: 620px) {
       .wrap { width: min(100% - 22px, 1180px); }
@@ -139,7 +137,11 @@
       .logo, .logo-fallback { width: 58px; height: 58px; flex-basis: 58px; }
       .toolbar { grid-template-columns: 1fr; }
       .summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .quick-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .quick-stats, .expanded-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .player-photo, .player-photo-fallback { width: 88px; height: 104px; flex-basis: 88px; border-radius: 10px; }
+      details.player summary { padding: 12px; }
+      .player-head { gap: 10px; }
+      .player-name h3 { font-size: 1.05rem; }
       .intro { display: block; }
       .status { text-align: left; margin-top: 8px; }
     }
@@ -409,28 +411,47 @@
       return "Unassigned";
     }
 
+    function playerInitials(name) {
+      return String(name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase();
+    }
+
     function cardHTML(p) {
-      const meta = [p.position, p.team && p.team !== p.rosterValue ? p.team : ""].filter(Boolean).join(" · ") || "Player";
-      const quick = displayStats.slice(0, 6).map(([label, key]) => statTile(label, p[key])).join("");
-      const details = displayStats.map(([label, key]) =>
-        `<tr><td>${escapeHTML(label)}</td><td>${escapeHTML(p[key] || "—")}</td></tr>`
-      ).join("");
+      const meta = [p.position || "Position not listed", p.team && p.team !== p.rosterValue ? p.team : ""].filter(Boolean).join(" · ");
+      const quickKeys = ["games", "goals", "assists", "points"];
+      const advancedKeys = displayStats.filter(([, key]) =>
+        !["number", "birthYear", "games", "goals", "assists", "points"].includes(key)
+      );
+      const quick = quickKeys.map(key => {
+        const item = displayStats.find(([, statKey]) => statKey === key);
+        return statTile(item[0], p[key]);
+      }).join("");
+      const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key])).join("");
+      const photo = p.photo
+        ? `<img class="player-photo" src="${escapeHTML(p.photo)}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+           <div class="player-photo-fallback" hidden aria-hidden="true">${escapeHTML(playerInitials(p.name))}</div>`
+        : `<div class="player-photo-fallback" aria-hidden="true">${escapeHTML(playerInitials(p.name))}</div>`;
 
       return `<details class="player">
         <summary>
           <div class="player-head">
-            <div class="number">${escapeHTML(p.number || "—")}</div>
+            ${photo}
             <div class="player-name">
-              <h3>${escapeHTML(p.name)}</h3>
-              <div class="player-meta">${escapeHTML(meta)}</div>
+              <div class="player-title-line">
+                <h3>${escapeHTML(p.name)}</h3>
+                <span class="player-number">#${escapeHTML(p.number || "—")}</span>
+              </div>
+              <div class="player-meta-line">
+                <span>${escapeHTML(meta || "Player")}</span>
+                <span class="player-birth-year">Birth Year: ${escapeHTML(p.birthYear || "—")}</span>
+              </div>
             </div>
             <span class="chevron" aria-hidden="true">⌄</span>
           </div>
           <div class="quick-stats">${quick}</div>
         </summary>
         <div class="player-body">
-          <p class="section-label">Player statistics</p>
-          <table class="stat-table"><tbody>${details}</tbody></table>
+          <p class="section-label">Additional statistics</p>
+          <div class="expanded-stats">${advanced}</div>
         </div>
       </details>`;
     }
