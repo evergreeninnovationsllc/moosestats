@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -54,6 +55,9 @@
     .quick-stats,.expanded-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
     .stat{min-width:0;text-align:center;padding:7px 4px;border-radius:4px;background:rgba(13,34,50,.72);border:1px solid rgba(44,60,76,.65)}
     .stat b{display:block;font-size:1.05rem;overflow-wrap:anywhere}
+    .stat.top-five{border-color:#42d879;background:rgba(20,78,43,.34)}
+    .stat.top-five b,.stat.top-five span{color:#64ed91}
+    .leader-card.top-five .leader-label,.leader-card.top-five .leader-value{color:#64ed91}
     .stat span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.02em}
     .player-body{border-top:1px solid var(--line);padding:12px}
     .section-label{color:var(--accent);font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
@@ -78,7 +82,7 @@
   <header>
     <div class="wrap topbar">
       <!-- Optional: put the official logo file in this repository and set its path below. -->
-      <img id="teamLogo" class="logo" src="moose-logo.png" alt="Rocky Mountain Moose logo"
+      <img id="teamLogo" class="logo" src="https://irp.cdn-website.com/53e335b4/dms3rep/multi/opt/moose-1920w.png" alt="Rocky Mountain Moose logo"
            onerror="this.hidden=true;document.getElementById('logoFallback').hidden=false">
       <div id="logoFallback" class="logo-fallback" hidden aria-hidden="true">M</div>
       <div>
@@ -221,7 +225,7 @@
       age: ["age"],
       school: ["school"],
       photo: [
-        "photo", "photourl", "playerphoto", "playerphotourl", "playerpicture",
+        "photourl", "playerphotourl", "photo", "playerphoto", "playerpicture",
         "playerpictureurl", "picture", "pictureurl", "picturelink", "photolink",
         "image", "imageurl", "imagelink", "profilephoto", "profileimage",
         "headshot", "headshoturl", "headshotlink", "portrait", "portraiturl"
@@ -315,8 +319,30 @@
       }).filter(p => p.name);
     }
 
-    function statTile(label, value) {
-      return `<div class="stat"><b>${escapeHTML(value || "—")}</b><span>${escapeHTML(label)}</span></div>`;
+    function statTile(label, value, isTopFive = false) {
+      return `<div class="stat${isTopFive ? " top-five" : ""}"><b>${escapeHTML(value || "—")}</b><span>${escapeHTML(label)}</span></div>`;
+    }
+
+    // Highlight each player's statistic when it ranks among the top five
+    // within that player's own age-group roster.
+    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts"];
+    function topFiveSet(list, key) {
+      const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && Number.isFinite(num(p[key])))
+        .slice().sort((a, b) => num(b[key]) - num(a[key]));
+      return new Set(eligible.slice(0, 5).map(p => p));
+    }
+    function buildTopFiveByRoster() {
+      const result = { "16U": {}, "19U": {}, "Unassigned": {} };
+      for (const group of Object.keys(result)) {
+        const rosterPlayers = players.filter(p => rosterGroup(p) === group);
+        for (const key of rankingKeys) result[group][key] = topFiveSet(rosterPlayers, key);
+      }
+      return result;
+    }
+    let topFiveByRoster = { "16U": {}, "19U": {}, "Unassigned": {} };
+    function isTopFive(p, key) {
+      const group = rosterGroup(p);
+      return Boolean(topFiveByRoster[group]?.[key]?.has(p));
     }
 
     const displayStats = [
@@ -361,7 +387,7 @@
       );
       const quick = quickKeys.map(key => {
         const item = displayStats.find(([, statKey]) => statKey === key);
-        return statTile(item[0], p[key]);
+        return statTile(item[0], p[key], isTopFive(p, key));
       }).join("");
       const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key])).join("");
       const photo = p.photo
@@ -412,7 +438,7 @@
         let value = player[key] || "—";
         if (["savePct","faceoffPct","passPct"].includes(key) && num(value) <= 1 && String(value).includes(".")) value = `${Math.round(num(value)*100)}%`;
         else if (["savePct","faceoffPct","passPct"].includes(key) && !String(value).includes("%")) value = `${value}%`;
-        return `<div class="leader-card"><div class="leader-label">${escapeHTML(label)}</div>${photo}<div class="leader-value">${escapeHTML(value)}</div><div class="leader-name">#${escapeHTML(player.number || "—")} ${escapeHTML(player.name)}</div><div class="leader-year">${escapeHTML(player.birthYear || "")}</div></div>`;
+        return `<div class="leader-card${isTopFive(player, key) ? " top-five" : ""}"><div class="leader-label">${escapeHTML(label)}</div>${photo}<div class="leader-value">${escapeHTML(value)}</div><div class="leader-name">#${escapeHTML(player.number || "—")} ${escapeHTML(player.name)}</div><div class="leader-year">${escapeHTML(player.birthYear || "")}</div></div>`;
       }).join("") || '<div class="empty">No leaderboard statistics available.</div>';
     }
 
@@ -448,6 +474,7 @@
       document.getElementById("count19").textContent = `(${grouped["19U"].length})`;
       document.getElementById("countUnassigned").textContent = `(${grouped.Unassigned.length})`;
 
+      topFiveByRoster = buildTopFiveByRoster();
       const sumStat = key => filtered.reduce((sum, p) => sum + num(p[key]), 0);
       const averagePct = key => {
         const values = filtered.map(p => p[key]).filter(v => String(v).trim() !== "");
@@ -455,7 +482,7 @@
         const avg = values.reduce((sum, v) => sum + num(v), 0) / values.length;
         return `${Math.round(avg)}%`;
       };
-      document.getElementById("totalGames").textContent = sumStat("games");
+      document.getElementById("totalGames").textContent = players.length ? Math.max(...players.map(p => num(p.games))) : 0;
       document.getElementById("totalGoals").textContent = sumStat("goals");
       document.getElementById("totalAssists").textContent = sumStat("assists");
       document.getElementById("totalHits").textContent = sumStat("hits");
