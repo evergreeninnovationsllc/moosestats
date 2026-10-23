@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,6 +50,7 @@
     .player-title-line,.player-meta-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 9px}
     .player-meta-line{margin-top:4px;color:var(--muted);font-size:.85rem}
     .player-number,.player-birth-year{color:var(--accent2);font-weight:800}
+    .captain-badge{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;padding:0 6px;border-radius:4px;background:#e7b847;color:#111;font-size:.78rem;font-weight:950;line-height:1;box-shadow:0 0 0 1px #fff3 inset}
     .chevron{color:var(--accent);font-size:1.1rem;margin-left:auto}
     details[open] .chevron{transform:rotate(180deg)}
     .quick-stats,.expanded-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
@@ -207,7 +209,9 @@
       faceoffPct: ["faceoffpct", "faceoffpercentage", "faceoffpercent", "fopct", "fo pct", "fo%"],
       passes: ["passes", "pass", "passattempts", "totalpasses"],
       passPct: ["passpct", "passpercentage", "passpercent", "passingpct", "passingpercentage"],
-      turnoverRatio: ["turnoverratio", "turnoversratio", "turnoverrate", "turnoverpct", "turnovers"],
+      turnoverRatio: ["to", "turnoverratio", "turnoversratio", "turnoverrate", "turnoverpct", "turnovers"],
+      topSpeed: ["topspeed", "top speed", "maximumspeed", "maxspeed"],
+      captain: ["captain", "captaindesignation", "leadership"],
       pim: ["pim", "penaltyminutes", "penalties"],
       wins: ["wins", "w"],
       losses: ["losses", "l"],
@@ -338,6 +342,8 @@
           passes: valueAt(row, headers, "passes"),
           passPct: valueAt(row, headers, "passPct"),
           turnoverRatio: valueAt(row, headers, "turnoverRatio"),
+          topSpeed: valueAt(row, headers, "topSpeed"),
+          captain: valueAt(row, headers, "captain").trim().toUpperCase(),
           photo: normalizePhotoURL(valueAt(row, headers, "photo")),
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
@@ -351,7 +357,7 @@
 
     // Highlight each player's statistic when it ranks among the top five
     // within that player's own age-group roster.
-    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts"];
+    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "topSpeed", "pim", "wins", "saves", "shutouts"];
     function topFiveSet(list, key) {
       const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && Number.isFinite(num(p[key])))
         .slice().sort((a, b) => num(b[key]) - num(a[key]));
@@ -387,7 +393,8 @@
       ["Faceoff %", "faceoffPct"],
       ["Passes", "passes"],
       ["Pass%", "passPct"],
-      ["Turnover Ratio", "turnoverRatio"]
+      ["Turnover Rate", "turnoverRatio"],
+      ["Top Speed", "topSpeed"]
     ];
 
     function rosterGroup(p) {
@@ -428,6 +435,7 @@
             <div class="player-name">
               <div class="player-title-line">
                 <h3>${escapeHTML(p.name)}</h3>
+                ${["A", "C"].includes(p.captain) ? `<span class="captain-badge" title="${p.captain === "C" ? "Captain" : "Assistant Captain"}">${escapeHTML(p.captain)}</span>` : ""}
                 <span class="player-number">#${escapeHTML(p.number || "—")}</span>
               </div>
               <div class="player-meta-line">
