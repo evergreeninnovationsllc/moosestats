@@ -56,7 +56,6 @@
     .stat b{display:block;font-size:1.05rem;overflow-wrap:anywhere}
     .stat.top-five{border-color:#42d879;background:rgba(20,78,43,.34)}
     .stat.top-five b,.stat.top-five span{color:#64ed91!important;text-shadow:0 0 8px rgba(100,237,145,.12)}
-    .leader-card.top-five .leader-label,.leader-card.top-five .leader-value{color:#64ed91!important;text-shadow:0 0 8px rgba(100,237,145,.12)}
     .stat span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.02em}
     .player-body{border-top:1px solid var(--line);padding:12px}
     .section-label{color:var(--accent);font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
@@ -254,19 +253,38 @@
       return index >= 0 ? String(row[index] ?? "").trim() : "";
     }
 
-    // Accept direct image URLs and common Google Drive share links from the CSV.
-    // For best results, the spreadsheet photo column should contain a publicly
-    // viewable image URL (not an IMAGE() formula or a private file link).
+    // Convert Google Drive links to image-serving URLs. Drive files must be shared
+    // as "Anyone with the link" for visitors to this public GitHub Pages site.
     function normalizePhotoURL(value) {
       const raw = String(value ?? "").trim();
       if (!raw) return "";
       const match = raw.match(/https?:\/\/[^\s"'<>]+/i);
       const url = match ? match[0].replace(/[),.;]+$/, "") : raw;
       const driveFile = url.match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?(?:[^#]*&)?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([a-zA-Z0-9_-]+)/i);
-      if (driveFile) return `https://drive.google.com/uc?export=view&id=${driveFile[1]}`;
+      if (driveFile) return `https://drive.google.com/thumbnail?id=${driveFile[1]}&sz=w1000`;
       // Some spreadsheets contain a Drive file ID by itself instead of a full URL.
-      if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) return `https://drive.google.com/uc?export=view&id=${url}`;
+      if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) return `https://drive.google.com/thumbnail?id=${url}&sz=w1000`;
       return url;
+    }
+
+    // If Drive's thumbnail endpoint is unavailable, try its other common image URL
+    // forms before displaying the initials fallback.
+    function photoImageError(img) {
+      const idMatch = String(img.dataset.originalPhoto || img.src).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      const id = idMatch && idMatch[1];
+      const attempt = Number(img.dataset.photoAttempt || 0);
+      if (id && attempt === 0) {
+        img.dataset.photoAttempt = "1";
+        img.src = `https://drive.google.com/uc?export=view&id=${id}`;
+        return;
+      }
+      if (id && attempt === 1) {
+        img.dataset.photoAttempt = "2";
+        img.src = `https://lh3.googleusercontent.com/d/${id}=w1000`;
+        return;
+      }
+      img.hidden = true;
+      if (img.nextElementSibling) img.nextElementSibling.hidden = false;
     }
 
     function num(value) {
@@ -399,7 +417,7 @@
       }).join("");
       const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key], isTopFive(p, key))).join("");
       const photo = p.photo
-        ? `<img class="player-photo" src="${escapeHTML(p.photo)}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+        ? `<img class="player-photo" data-original-photo="${escapeHTML(p.photo)}" src="${escapeHTML(p.photo)}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="photoImageError(this)">
            <div class="player-photo-fallback" hidden aria-hidden="true">${escapeHTML(playerInitials(p.name))}</div>`
         : `<div class="player-photo-fallback" aria-hidden="true">${escapeHTML(playerInitials(p.name))}</div>`;
 
@@ -441,12 +459,12 @@
       }).filter(item => item.player);
       document.getElementById("leaderGrid").innerHTML = leaders.map(({label,player,key}) => {
         const photo = player.photo
-          ? `<img class="leader-photo" src="${escapeHTML(player.photo)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="leader-photo-fallback" hidden>${escapeHTML(playerInitials(player.name))}</span>`
+          ? `<img class="leader-photo" data-original-photo="${escapeHTML(player.photo)}" src="${escapeHTML(player.photo)}" alt="" loading="lazy" onerror="photoImageError(this)"><span class="leader-photo-fallback" hidden>${escapeHTML(playerInitials(player.name))}</span>`
           : `<span class="leader-photo-fallback">${escapeHTML(playerInitials(player.name))}</span>`;
         let value = player[key] || "—";
         if (["savePct","faceoffPct","passPct"].includes(key) && num(value) <= 1 && String(value).includes(".")) value = `${Math.round(num(value)*100)}%`;
         else if (["savePct","faceoffPct","passPct"].includes(key) && !String(value).includes("%")) value = `${value}%`;
-        return `<div class="leader-card${isTopFive(player, key) ? " top-five" : ""}"><div class="leader-label">${escapeHTML(label)}</div>${photo}<div class="leader-value">${escapeHTML(value)}</div><div class="leader-name">#${escapeHTML(player.number || "—")} ${escapeHTML(player.name)}</div><div class="leader-year">${escapeHTML(player.birthYear || "")}</div></div>`;
+        return `<div class="leader-card"><div class="leader-label">${escapeHTML(label)}</div>${photo}<div class="leader-value">${escapeHTML(value)}</div><div class="leader-name">#${escapeHTML(player.number || "—")} ${escapeHTML(player.name)}</div><div class="leader-year">${escapeHTML(player.birthYear || "")}</div></div>`;
       }).join("") || '<div class="empty">No leaderboard statistics available.</div>';
     }
 
