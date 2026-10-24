@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -148,10 +149,10 @@
   <script>
     // Published Google Sheets CSV feed. The sheet must be published to the web.
     const PUBLISHED_SHEET_ID = "2PACX-1vSWJPgIwaKz7oWWQew4njSI9wm-Y0QuKbqxBPbEWoilm31nOSgacolofCaXciIETk2Hw5nSjPhKDbPv";
-    // Skater stats are the default published tab. Set GOALIE_TAB_GID to the numeric
-    // gid for the separate "Goalie Stats" tab (visible in its Google Sheets URL).
+    // Skater stats are loaded from the default published tab. Goalie Stats is a separate tab.
     const CSV_URL = `https://docs.google.com/spreadsheets/d/e/${PUBLISHED_SHEET_ID}/pub?output=csv`;
-    const GOALIE_TAB_GID = "REPLACE_WITH_GOALIE_TAB_GID";
+    // GID copied from the Goalie Stats tab URL.
+    const GOALIE_TAB_GID = "1901834546";
     const GOALIE_CSV_URL = `https://docs.google.com/spreadsheets/d/e/${PUBLISHED_SHEET_ID}/pub?gid=${GOALIE_TAB_GID}&single=true&output=csv`;
 
     const statusEl = document.getElementById("status");
@@ -625,17 +626,13 @@
         const skaterRows = await fetchCSV(CSV_URL);
         players = makePlayers(skaterRows);
 
-        // Load goalies from their own published tab. The tab GID must be configured above.
-        if (GOALIE_TAB_GID !== "REPLACE_WITH_GOALIE_TAB_GID") {
-          const goalieRows = await fetchCSV(GOALIE_CSV_URL);
-          const goaliePlayers = makePlayers(goalieRows, true);
-          // Avoid duplicate entries if goalie rows are still present in the skater tab.
-          const goalieNames = new Set(goaliePlayers.map(p => p.name.trim().toLowerCase()));
-          players = players.filter(p => !isGoalie(p) && !goalieNames.has(p.name.trim().toLowerCase()));
-          players.push(...goaliePlayers);
-        } else {
-          console.warn("Goalie Stats tab not connected yet: replace GOALIE_TAB_GID with that tab's numeric gid in index.html.");
-        }
+        // Load goalies from their own published tab.
+        const goalieRows = await fetchCSV(GOALIE_CSV_URL);
+        const goaliePlayers = makePlayers(goalieRows, true);
+        // Avoid duplicate entries if goalie rows are still present in the skater tab.
+        const goalieNames = new Set(goaliePlayers.map(p => p.name.trim().toLowerCase()));
+        players = players.filter(p => !isGoalie(p) && !goalieNames.has(p.name.trim().toLowerCase()));
+        players.push(...goaliePlayers);
         if (!players.length) {
           throw new Error("CSV loaded, but no player names were detected. Check the first-row headers and the player-name column.");
         }
