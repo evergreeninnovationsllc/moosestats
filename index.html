@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -54,8 +55,10 @@
     .quick-stats,.expanded-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
     .stat{min-width:0;text-align:center;padding:7px 4px;border-radius:4px;background:rgba(13,34,50,.72);border:1px solid rgba(44,60,76,.65)}
     .stat b{display:block;font-size:1.05rem;overflow-wrap:anywhere}
-    .stat.top-five{border-color:#42d879;background:rgba(20,78,43,.34)}
-    .stat.top-five b,.stat.top-five span{color:#64ed91!important;text-shadow:0 0 8px rgba(100,237,145,.12)}
+    .stat.top-green{border-color:#42d879;background:rgba(20,78,43,.34)}
+    .stat.top-green b,.stat.top-green span{color:#64ed91!important;text-shadow:0 0 8px rgba(100,237,145,.12)}
+    .stat.top-yellow{border-color:#e6c84f;background:rgba(100,82,15,.28)}
+    .stat.top-yellow b,.stat.top-yellow span{color:#ffe477!important;text-shadow:0 0 8px rgba(255,228,119,.08)}
     .stat span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.02em}
     .player-body{border-top:1px solid var(--line);padding:12px}
     .section-label{color:var(--accent);font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
@@ -410,29 +413,40 @@
       }).filter(p => p.name);
     }
 
-    function statTile(label, value, isTopFive = false) {
+    function statTile(label, value, highlightClass = "") {
       let shown = String(value ?? "").trim() || "—";
       if (label.toLowerCase() === "save %" && shown !== "—" && shown !== "-") {
         if (!shown.includes("%")) shown = num(shown) <= 1 && shown.includes(".") ? `${Math.round(num(shown) * 100)}%` : `${shown}%`;
       }
-      return `<div class="stat${isTopFive ? " top-five" : ""}"><b>${escapeHTML(shown)}</b><span>${escapeHTML(label)}</span></div>`;
+      const cssClass = ["stat", highlightClass].filter(Boolean).join(" ");
+      return `<div class="${cssClass}"><b>${escapeHTML(shown)}</b><span>${escapeHTML(label)}</span></div>`;
     }
 
-    // Highlight only the single best value for each stat within each age-group
-    // and player type. Goals and GAA are intentionally ranked low-to-high.
-    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts", "savePct", "gaa", "minutes"];
-    const lowWinsKeys = new Set(["goals", "gaa"]);
-    function bestStatSet(list, key) {
-      const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && String(p[key]).trim() !== "-" && Number.isFinite(num(p[key])));
-      if (!eligible.length) return new Set();
-      eligible.sort((a, b) => lowWinsKeys.has(key) ? num(a[key]) - num(b[key]) : num(b[key]) - num(a[key]));
-      const best = num(eligible[0][key]);
-      return new Set(eligible.filter(p => num(p[key]) === best));
-    }
-    function isTopFive(p, key) {
+    // Player highlights: games played leader only; for other listed stats, leader
+    // is green and the next two ranks are yellow. Goalie highlights are green only.
+    const playerRankedKeys = new Set(["goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio"]);
+    const playerHighlightKeys = new Set(["games", ...playerRankedKeys]);
+
+    function highlightClass(p, key) {
+      if (!playerHighlightKeys.has(key) && !["savePct", "gaa", "minutes", "shutouts"].includes(key)) return "";
+      const goalie = isGoalie(p);
+      if (!goalie && !playerHighlightKeys.has(key)) return "";
+      if (goalie && !["goals", "shots", "savePct", "gaa", "minutes", "shutouts", "passes", "assists"].includes(key)) return "";
       const sameGroupAndType = players.filter(candidate =>
-        rosterGroup(candidate) === rosterGroup(p) && isGoalie(candidate) === isGoalie(p));
-      return bestStatSet(sameGroupAndType, key).has(p);
+        rosterGroup(candidate) === rosterGroup(p) && isGoalie(candidate) === goalie);
+      const eligible = sameGroupAndType.filter(candidate => {
+        const raw = String(candidate[key] ?? "").trim();
+        return raw !== "" && raw !== "-" && Number.isFinite(num(raw));
+      });
+      if (!eligible.length) return "";
+      const lowerWins = (goalie && (key === "goals" || key === "gaa"));
+      eligible.sort((a, b) => lowerWins ? num(a[key]) - num(b[key]) : num(b[key]) - num(a[key]));
+      const rank = eligible.filter(candidate => lowerWins
+        ? num(candidate[key]) < num(p[key])
+        : num(candidate[key]) > num(p[key])).length;
+      if (rank === 0) return "top-green";
+      if (!goalie && key !== "games" && playerRankedKeys.has(key) && rank <= 2) return "top-yellow";
+      return "";
     }
 
     const displayStats = [
@@ -451,11 +465,7 @@
       ["Faceoff %", "faceoffPct"],
       ["Passes", "passes"],
       ["Pass%", "passPct"],
-      ["Turnover Ratio", "turnoverRatio"],
-      ["Save %", "savePct"],
-      ["GAA", "gaa"],
-      ["Minutes", "minutes"],
-      ["Shutouts", "shutouts"]
+      ["Turnover Ratio", "turnoverRatio"]
     ];
 
     function isGoalie(p) {
@@ -489,9 +499,9 @@
         : displayStats.filter(([, key]) => !["number", "birthYear", "games", "goals", "assists", "points"].includes(key));
       const quick = quickKeys.map(key => {
         const item = (goalieCard ? goalieStats : displayStats).find(([, statKey]) => statKey === key);
-        return statTile(item ? item[0] : key, p[key], isTopFive(p, key));
+        return statTile(item ? item[0] : key, p[key], highlightClass(p, key));
       }).join("");
-      const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key], isTopFive(p, key))).join("");
+      const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key], highlightClass(p, key))).join("");
       const photo = p.photo
         ? `<img class="player-photo" data-original-photo="${escapeHTML(p.photo)}" src="${escapeHTML(p.photo)}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="photoImageError(this)">
            <div class="player-photo-fallback" hidden aria-hidden="true">${escapeHTML(playerInitials(p.name))}</div>`
@@ -523,14 +533,24 @@
     }
 
     function renderLeaderboard(list) {
+      const skaters = list.filter(p => !isGoalie(p));
+      const goalies = list.filter(isGoalie);
       const metrics = [
-        ["Goals", "goals"], ["Assists", "assists"], ["Points", "points"],
-        ["Shots", "shots"], ["Hits", "hits"], ["Save %", "savePct"],
-        ["Passes", "passes"], ["FO %", "faceoffPct"], ["TOs", "turnoverRatio"], ["PIM", "pim"]
+        ["Goals", "goals", skaters, false],
+        ["Assists", "assists", skaters, false],
+        ["Points", "points", skaters, false],
+        ["Player Shots", "shots", skaters, false],
+        ["Hits", "hits", skaters, false],
+        ["Passes", "passes", skaters, false],
+        ["FO %", "faceoffPct", skaters, false],
+        ["Turnover Ratio", "turnoverRatio", skaters, false],
+        ["PIM", "pim", skaters, false],
+        ["Goalie Shots Faced", "shots", goalies, false],
+        ["Lowest Goalie GAA", "gaa", goalies, true]
       ];
-      const leaders = metrics.map(([label, key]) => {
-        const candidates = list.filter(p => String(p[key] ?? "").trim() !== "");
-        candidates.sort((a,b) => num(b[key]) - num(a[key]));
+      const leaders = metrics.map(([label, key, candidatesList, lowestWins]) => {
+        const candidates = candidatesList.filter(p => String(p[key] ?? "").trim() !== "" && String(p[key]).trim() !== "-" && Number.isFinite(num(p[key])));
+        candidates.sort((a, b) => lowestWins ? num(a[key]) - num(b[key]) : num(b[key]) - num(a[key]));
         return {label, player:candidates[0], key};
       }).filter(item => item.player);
       document.getElementById("leaderGrid").innerHTML = leaders.map(({label,player,key}) => {
@@ -563,7 +583,7 @@
         return a.name.localeCompare(b.name);
       });
 
-      // Build rankings before generating cards so top-five classes are applied on first render.
+      // Build the age-grouped rosters before generating cards so rank highlights are applied on first render.
       const grouped = {
         "16U": filtered.filter(p => rosterGroup(p) === "16U" && !isGoalie(p)),
         "19U": filtered.filter(p => rosterGroup(p) === "19U" && !isGoalie(p)),
