@@ -71,6 +71,14 @@
     .leader-value{font-size:1.25rem;font-weight:850;line-height:1.15}
     .leader-name{font-size:.75rem;color:var(--accent2);overflow-wrap:anywhere}
     .leader-year{font-size:.68rem;color:var(--muted)}
+    .team-stats-table-wrap{width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:rgba(3,14,25,.34)}
+    .team-stats-table{width:100%;border-collapse:collapse;min-width:420px}
+    .team-stats-table th,.team-stats-table td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+    .team-stats-table th:first-child,.team-stats-table td:first-child{text-align:left}
+    .team-stats-table thead th{background:rgba(16,40,58,.9);color:var(--accent2);font-size:.82rem;text-transform:uppercase;letter-spacing:.035em}
+    .team-stats-table tbody tr:last-child td{border-bottom:0}
+    .team-stats-table td.team-stat-winner{background:rgba(20,78,43,.5);color:#64ed91;font-weight:850;box-shadow:inset 0 0 0 1px #42d879}
+    .team-stats-note{margin:0 0 10px;color:var(--muted);font-size:.82rem}
     footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:.84rem}
     footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
     [hidden]{display:none!important}
@@ -116,6 +124,13 @@
     <details class="accordion" id="leaderAccordion">
       <summary>Leader Board</summary>
       <div class="accordion-content"><div id="leaderGrid" class="leader-grid"></div></div>
+    </details>
+    <details class="accordion" id="teamStatsAccordion">
+      <summary>Team Stats</summary>
+      <div class="accordion-content">
+        <p class="team-stats-note">Season totals and rates compared between the 16U and 19U teams. Green highlights the better value for each statistic.</p>
+        <div id="teamStatsTable" class="team-stats-table-wrap" aria-live="polite"></div>
+      </div>
     </details>
     <details class="accordion" id="accordion16">
       <summary>16U Roster <span class="section-count" id="count16">(0)</span></summary>
@@ -211,14 +226,17 @@
       birthYear: ["birthyear", "yearofbirth", "yob", "born", "birthyr"],
       games: ["games", "gp", "gamesplayed"],
       goals: ["goals", "g"],
+      goalsAgainst: ["goalsagainst", "ga"],
       assists: ["assists", "a"],
       points: ["points", "pts", "p"],
       plusMinus: ["plusminus", "plusmin", "+minus", "pm"],
-      shots: ["shots", "shotsagainst", "sa", "sog", "shotsongoal", "shotsonnet"],
+      shots: ["shots", "sog", "shotsongoal", "shotsonnet"],
+      shotsAgainst: ["shotsagainst", "sa", "shotsfaced"],
       shotAttempts: ["shotattempts", "shotattempt", "attempts", "totalshotattempts"],
       hits: ["hits", "hit"],
       blockedShots: ["blockedshots", "blockedshot", "shotsblocked", "blocks"],
-      faceoffs: ["faceoffs", "faceoff", "faceoffwins", "fow", "fo"],
+      faceoffs: ["faceoffs", "faceoffattempts", "totalfaceoffs", "foa", "fo"],
+      faceoffWins: ["faceoffwins", "fow", "wonfaceoffs", "faceoffswon"],
       faceoffPct: ["faceoffpct", "faceoffpercentage", "faceoffpercent", "fopct", "fo pct", "fo%"],
       passes: ["passes", "pass", "passattempts", "totalpasses"],
       passPct: ["passpct", "passpercentage", "passpercent", "passingpct", "passingpercentage"],
@@ -256,9 +274,12 @@
         const index = headers.findIndex(h => normalize(h) === normalize(alias));
         if (index >= 0) return index;
       }
-      // Support headers like "Player Goals" or "Season Assists".
+      // Support headers like "Player Goals" or "Season Assists", but avoid
+      // matching very short aliases (e.g. FO) inside unrelated headers like FOW.
       for (const alias of choices) {
-        const index = headers.findIndex(h => normalize(h).includes(normalize(alias)));
+        const normalizedAlias = normalize(alias);
+        if (normalizedAlias.length <= 2) continue;
+        const index = headers.findIndex(h => normalize(h).includes(normalizedAlias));
         if (index >= 0) return index;
       }
       return -1;
@@ -381,16 +402,20 @@
           rosterValue,
           games: valueAt(row, headers, "games"),
           goals: valueAt(row, headers, "goals"),
+          goalsAgainst: valueAt(row, headers, "goalsAgainst"),
           assists: valueAt(row, headers, "assists"),
           points: valueAt(row, headers, "points"),
           plusMinus: valueAt(row, headers, "plusMinus"),
           shots: valueAt(row, headers, "shots"),
+          shotsAgainst: forceGoalies ? goalieValueAt(row, headers, "shots") : valueAt(row, headers, "shotsAgainst"),
           shotAttempts: valueAt(row, headers, "shotAttempts"),
           hits: valueAt(row, headers, "hits"),
           blockedShots: valueAt(row, headers, "blockedShots"),
           faceoffs: valueAt(row, headers, "faceoffs"),
+          faceoffWins: valueAt(row, headers, "faceoffWins"),
           faceoffPct: valueAt(row, headers, "faceoffPct"),
           passes: valueAt(row, headers, "passes"),
+          pim: valueAt(row, headers, "pim"),
           passPct: valueAt(row, headers, "passPct"),
           turnoverRatio: valueAt(row, headers, "turnoverRatio"),
           savePct: valueAt(row, headers, "savePct"),
@@ -407,6 +432,8 @@
             const value = goalieValueAt(row, headers, key);
             if (value !== "") player[key] = value;
           }
+          player.goalsAgainst = player.goals;
+          player.shotsAgainst = player.shots;
         }
         return player;
       }).filter(p => p.name);
@@ -563,6 +590,106 @@
       }).join("") || '<div class="empty">No leaderboard statistics available.</div>';
     }
 
+    function validStat(value) {
+      const raw = String(value ?? "").trim();
+      return raw !== "" && raw !== "-" && Number.isFinite(num(raw));
+    }
+
+    function sumKnown(list, key) {
+      const values = list.map(p => p[key]).filter(validStat);
+      return values.length ? values.reduce((total, value) => total + num(value), 0) : null;
+    }
+
+    function teamStatSummary(group) {
+      const roster = players.filter(p => rosterGroup(p) === group);
+      const skaters = roster.filter(p => !isGoalie(p));
+      const goalies = roster.filter(isGoalie);
+      const gamesValues = roster.map(p => p.games).filter(validStat).map(num);
+      const games = gamesValues.length ? Math.max(...gamesValues) : null;
+      const goalsFor = sumKnown(skaters, "goals");
+      // On the goalie sheet, the Goalie "Goals" stat represents goals allowed.
+      const goalsAgainst = sumKnown(goalies, "goalsAgainst") ?? sumKnown(goalies, "goals");
+      const shotAttempts = sumKnown(skaters, "shotAttempts");
+      const shots = sumKnown(skaters, "shots");
+      const shotsMissed = shotAttempts !== null && shots !== null ? shotAttempts - shots : null;
+      const shotPct = goalsFor !== null && shots !== null && shots > 0 ? goalsFor / shots * 100 : null;
+      const faceoffTotal = sumKnown(skaters, "faceoffs");
+      let faceoffWins = sumKnown(skaters, "faceoffWins");
+      if (faceoffWins === null && faceoffTotal !== null) {
+        const pctValues = skaters.filter(p => validStat(p.faceoffPct));
+        if (pctValues.length) {
+          faceoffWins = pctValues.reduce((total, p) => {
+            const pct = num(p.faceoffPct) > 1 ? num(p.faceoffPct) / 100 : num(p.faceoffPct);
+            const attempts = validStat(p.faceoffs) ? num(p.faceoffs) : 0;
+            return total + attempts * pct;
+          }, 0);
+        }
+      }
+      let faceoffs = faceoffTotal;
+      if (faceoffs === null && faceoffWins !== null) {
+        const weighted = skaters.filter(p => validStat(p.faceoffWins) && validStat(p.faceoffPct) && num(p.faceoffPct) > 0);
+        if (weighted.length) faceoffs = weighted.reduce((total, p) => {
+          const pct = num(p.faceoffPct) > 1 ? num(p.faceoffPct) / 100 : num(p.faceoffPct);
+          return total + num(p.faceoffWins) / pct;
+        }, 0);
+      }
+      const faceoffPct = faceoffs !== null && faceoffWins !== null && faceoffs > 0 ? faceoffWins / faceoffs * 100 : (() => {
+        const pctPlayers = skaters.filter(p => validStat(p.faceoffPct));
+        if (!pctPlayers.length) return null;
+        const weights = pctPlayers.map(p => validStat(p.faceoffs) ? num(p.faceoffs) : 1);
+        const totalWeight = weights.reduce((a,b) => a+b,0);
+        return totalWeight ? pctPlayers.reduce((total,p,i) => total + (num(p.faceoffPct) > 1 ? num(p.faceoffPct) : num(p.faceoffPct) * 100) * weights[i],0) / totalWeight : null;
+      })();
+      const shotsAgainst = sumKnown(goalies, "shotsAgainst") ?? sumKnown(goalies, "shots");
+      const savePct = shotsAgainst !== null && shotsAgainst > 0 && goalsAgainst !== null
+        ? (shotsAgainst - goalsAgainst) / shotsAgainst * 100
+        : (() => {
+            const values = goalies.filter(p => validStat(p.savePct));
+            if (!values.length) return null;
+            const weights = values.map(p => validStat(p.shotsAgainst) ? num(p.shotsAgainst) : (validStat(p.shots) ? num(p.shots) : 1));
+            const totalWeight = weights.reduce((a,b) => a+b,0);
+            return totalWeight ? values.reduce((total,p,i) => total + (num(p.savePct) > 1 ? num(p.savePct) : num(p.savePct)*100) * weights[i],0) / totalWeight : null;
+          })();
+      return {
+        games, goalsFor, goalsAgainst,
+        goalDifferential: goalsFor !== null && goalsAgainst !== null ? goalsFor - goalsAgainst : null,
+        shotAttempts, shotsMissed, shots, shotPct,
+        faceoffs, faceoffWins, faceoffPct,
+        passes: sumKnown(skaters, "passes"), hits: sumKnown(skaters, "hits"), pim: sumKnown(skaters, "pim"),
+        shotsAgainst, savePct
+      };
+    }
+
+    function formatTeamStat(key, value) {
+      if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+      if (["shotPct", "faceoffPct", "savePct"].includes(key)) return `${value.toFixed(1)}%`;
+      return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
+    }
+
+    function renderTeamStats() {
+      const teams = {"16U": teamStatSummary("16U"), "19U": teamStatSummary("19U")};
+      const metrics = [
+        ["Games Played", "games"], ["Goals For", "goalsFor"], ["Goals Against", "goalsAgainst", true],
+        ["Goal Differential", "goalDifferential"], ["Shot Attempts", "shotAttempts"], ["Shots Missed", "shotsMissed"],
+        ["Shots", "shots"], ["Shot %", "shotPct"], ["Faceoffs", "faceoffs"], ["Faceoff Wins", "faceoffWins"],
+        ["Faceoff %", "faceoffPct"], ["Passes", "passes"], ["Hits", "hits"], ["PIM", "pim"],
+        ["Shots Against", "shotsAgainst", true], ["Save %", "savePct"]
+      ];
+      const rows = metrics.map(([label, key, lowerWins = false]) => {
+        const left = teams["16U"][key], right = teams["19U"][key];
+        const leftValid = left !== null && Number.isFinite(left), rightValid = right !== null && Number.isFinite(right);
+        let leftClass = "", rightClass = "";
+        if (leftValid && rightValid) {
+          if (left === right) leftClass = rightClass = "team-stat-winner";
+          else if (lowerWins ? left < right : left > right) leftClass = "team-stat-winner";
+          else rightClass = "team-stat-winner";
+        } else if (leftValid && !rightValid) leftClass = "team-stat-winner";
+        else if (rightValid && !leftValid) rightClass = "team-stat-winner";
+        return `<tr><td>${escapeHTML(label)}</td><td class="${leftClass}">${escapeHTML(formatTeamStat(key, left))}</td><td class="${rightClass}">${escapeHTML(formatTeamStat(key, right))}</td></tr>`;
+      }).join("");
+      document.getElementById("teamStatsTable").innerHTML = `<table class="team-stats-table"><thead><tr><th scope="col">Statistic</th><th scope="col">16U</th><th scope="col">19U</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
     function render() {
       const query = searchEl.value.trim().toLowerCase();
       const position = positionEl.value;
@@ -622,6 +749,7 @@
       document.getElementById("avgPassPct").textContent = averagePct("passPct");
       document.getElementById("avgFoPct").textContent = averagePct("faceoffPct");
       renderLeaderboard(filtered);
+      renderTeamStats();
       statusEl.textContent = `${filtered.length} players shown`;
     }
 
@@ -674,6 +802,7 @@
         ["totalGames", "totalGoals", "totalAssists", "totalHits", "avgPassPct", "avgFoPct"].forEach(id => {
           document.getElementById(id).textContent = "—";
         });
+        document.getElementById("teamStatsTable").innerHTML = '<div class="empty">Team statistics are unavailable until the spreadsheet loads.</div>';
       }
     }
 
