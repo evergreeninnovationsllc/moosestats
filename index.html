@@ -79,6 +79,13 @@
     .team-stats-table tbody tr:last-child td{border-bottom:0}
     .team-stats-table td.team-stat-winner{background:rgba(20,78,43,.5);color:#64ed91;font-weight:850;box-shadow:inset 0 0 0 1px #42d879}
     .team-stats-note{margin:0 0 10px;color:var(--muted);font-size:.82rem}
+
+    .stats-assistant{margin:18px 0;padding:18px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(16,35,51,.96),rgba(7,16,25,.98));box-shadow:0 12px 28px rgba(0,0,0,.18)}
+    .stats-assistant h3{margin:0 0 6px;font-size:1.15rem}.stats-assistant p{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+    .assistant-form{display:flex;gap:8px}.assistant-form input{flex:1;min-width:0;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#06111b;color:var(--text);font:inherit}.assistant-form button{padding:11px 16px;border:0;border-radius:10px;background:var(--accent,#b8e986);color:#071019;font-weight:800;cursor:pointer}
+    .assistant-examples{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.assistant-examples button{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:transparent;color:var(--muted);cursor:pointer;font-size:.8rem}
+    .assistant-answer{margin-top:13px;padding:12px 14px;border-radius:10px;background:rgba(0,0,0,.22);line-height:1.55;white-space:normal}.assistant-answer:empty{display:none}.assistant-answer strong{color:#fff}.assistant-answer .assistant-muted{color:var(--muted);font-size:.85rem}
+    @media(max-width:620px){.assistant-form{flex-direction:column}.assistant-form button{width:100%}}
     footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:.84rem}
     footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
     [hidden]{display:none!important}
@@ -121,6 +128,23 @@
       <div class="summary-card"><span>Av Pass %</span><strong id="avgPassPct">—</strong></div>
       <div class="summary-card"><span>Av FO%</span><strong id="avgFoPct">—</strong></div>
     </section>
+
+    <section class="stats-assistant" aria-labelledby="assistantTitle">
+      <h3 id="assistantTitle">Ask Moose Stats</h3>
+      <p>Ask a question about the current season statistics. Answers are calculated from the published team spreadsheet.</p>
+      <form class="assistant-form" id="statsAssistantForm">
+        <input id="statsQuestion" type="search" autocomplete="off" placeholder="e.g. Which 2010 player has the most passes?" aria-label="Ask a question about team statistics" required>
+        <button type="submit">Ask</button>
+      </form>
+      <div class="assistant-examples" aria-label="Example questions">
+        <button type="button" data-question="Which 2010 player has the most passes?">Most passes for 2010 players</button>
+        <button type="button" data-question="Who has the most goals on 16U?">16U goal leader</button>
+        <button type="button" data-question="Which 19U goalie has the lowest GAA?">Best 19U goalie GAA</button>
+        <button type="button" data-question="Who has the most shots?">Most shots</button>
+      </div>
+      <div id="statsAnswer" class="assistant-answer" role="status" aria-live="polite"></div>
+    </section>
+
     <details class="accordion" id="leaderAccordion">
       <summary>Leader Board</summary>
       <div class="accordion-content"><div id="leaderGrid" class="leader-grid"></div></div>
@@ -752,6 +776,102 @@
       renderTeamStats();
       statusEl.textContent = `${filtered.length} players shown`;
     }
+
+
+    // Free, local statistics Q&A. No external AI service or API key is used.
+    // It parses common hockey-stat questions and calculates answers from the live CSV data.
+    const assistantMetricMap = [
+      {key:"passes", label:"passes", words:["passes","pass"]},
+      {key:"goals", label:"goals", words:["goals","goal"]},
+      {key:"assists", label:"assists", words:["assists","assist"]},
+      {key:"points", label:"points", words:["points","point"]},
+      {key:"shotsAgainst", label:"shots faced", words:["shots faced","shots against","shots allowed","saves faced"]},
+      {key:"shots", label:"shots", words:["shots","shot"]},
+      {key:"games", label:"games played", words:["games played","games"]},
+      {key:"hits", label:"hits", words:["hits","hit"]},
+      {key:"shotAttempts", label:"shot attempts", words:["shot attempts","attempts"]},
+      {key:"blockedShots", label:"blocked shots", words:["blocked shots","blocks"]},
+      {key:"faceoffs", label:"faceoffs", words:["faceoffs","face offs"]},
+      {key:"faceoffPct", label:"faceoff percentage", words:["faceoff percentage","faceoff %","fo%","faceoff pct"]},
+      {key:"passPct", label:"pass percentage", words:["pass percentage","pass %","pass%","pass pct"]},
+      {key:"savePct", label:"save percentage", words:["save percentage","save %","save%","save pct"]},
+      {key:"gaa", label:"GAA", words:["gaa","goals against average"]},
+      {key:"minutes", label:"minutes", words:["minutes","mins"]},
+      {key:"shutouts", label:"shutouts", words:["shutouts","shutout"]},
+      {key:"plusMinus", label:"plus/minus", words:["plus minus","plus/minus","plusminus"]},
+      {key:"turnoverRatio", label:"turnover ratio", words:["turnover ratio","turnovers"]},
+      {key:"pim", label:"penalty minutes", words:["penalty minutes","pim"]}
+    ];
+
+    function assistantFormat(value, key) {
+      if (value === null || value === undefined || String(value).trim() === "" || String(value).trim() === "-") return "—";
+      const text = String(value).trim();
+      if (["savePct","passPct","faceoffPct"].includes(key)) {
+        if (text.includes("%")) return text;
+        const n = num(text);
+        return (n <= 1 && text.includes(".") ? (n * 100).toFixed(1).replace(/\.0$/,"" ) : n.toFixed(1).replace(/\.0$/,"")) + "%";
+      }
+      return text;
+    }
+
+    function answerStatsQuestion(question) {
+      const q = String(question || "").toLowerCase().replace(/[’']/g,"'");
+      if (!players.length) return "The stats have not loaded yet. Please wait for the roster to finish loading, then try again.";
+      let pool = players.slice();
+      const birthMatch = q.match(/\b(200[0-9]|201[0-9]|202[0-9])\b/);
+      if (birthMatch) pool = pool.filter(p => String(p.birthYear || p.stats.map(s=>s.value).join(" ")).includes(birthMatch[1]));
+      const ageMatch = q.match(/\b(16u|u16|16 under|16-and-under|19u|u19|19 under|19-and-under)\b/i);
+      if (ageMatch) {
+        const age = /19/.test(ageMatch[1]) ? "19U" : "16U";
+        pool = pool.filter(p => rosterGroup(p) === age);
+      }
+      const goalieQuery = /goalie|goaltender|goalkeeper|shots faced|shots against|save percentage|save %|\bgaa\b|shutout|goals against average/.test(q);
+      const playerQuery = /skater|player/.test(q) && !goalieQuery;
+      if (goalieQuery) pool = pool.filter(isGoalie);
+      else pool = pool.filter(p => !isGoalie(p));
+      if (!pool.length) return "I couldn't find any matching players for that question. Try checking the birth year or team age group.";
+
+      let metric = null;
+      const orderedMetrics = assistantMetricMap.slice().sort((a,b)=>Math.max(...b.words.map(w=>w.length))-Math.max(...a.words.map(w=>w.length)));
+      for (const candidate of orderedMetrics) {
+        if (candidate.words.some(word => q.includes(word))) { metric = candidate; break; }
+      }
+      if (!metric) return "I can answer questions about goals, assists, points, passes, shots, games played, hits, faceoffs, pass %, save %, GAA, minutes, shutouts, plus/minus, and other tracked stats. For example: ‘Which 2010 player has the most passes?’";
+      if (metric.key === "shotsAgainst") pool = pool.filter(isGoalie);
+      if (["savePct","gaa","minutes","shutouts"].includes(metric.key)) pool = pool.filter(isGoalie);
+      if (!pool.length) return "That statistic is available for goalies, but no matching goalies were found for the selected age group or birth year.";
+
+      const lowerIsBetter = ["gaa"].includes(metric.key) || (metric.key === "goals" && goalieQuery);
+      const wantsLowest = /lowest|least|fewest|smallest|minimum|best gaa|best goals against/.test(q) && (metric.key === "gaa" || /fewest|least|lowest/.test(q));
+      const wantsTopList = /top\s*(three|3|five|5|ten|10)|top players|rank|ranking|compare/.test(q);
+      const countMatch = q.match(/top\s*(\d+|three|five|ten)/);
+      const countWord = countMatch ? ({three:3,five:5,ten:10}[countMatch[1]] || Number(countMatch[1]) || 3) : 3;
+      const ranked = pool.filter(p => String(p[metric.key] ?? "").trim() !== "" && String(p[metric.key]).trim() !== "-")
+        .sort((a,b) => wantsLowest || lowerIsBetter ? num(a[metric.key])-num(b[metric.key]) : num(b[metric.key])-num(a[metric.key]));
+      if (!ranked.length) return `I couldn't find recorded ${metric.label} values for the matching players.`;
+      if (wantsTopList) {
+        const lines = ranked.slice(0, countWord).map((p,i)=>`${i+1}. <strong>${escapeHTML(p.name)}</strong> — ${escapeHTML(assistantFormat(p[metric.key],metric.key))} ${escapeHTML(metric.label)}${isGoalie(p)?" (goalie)":""}`);
+        return `<strong>Top ${Math.min(countWord,ranked.length)} by ${escapeHTML(metric.label)}${birthMatch?` (${birthMatch[1]} birth year)`:""}${ageMatch?` · ${/19/.test(ageMatch[1])?"19U":"16U"}`:""}</strong><br>${lines.join("<br>")}<div class="assistant-muted">Based on the currently published spreadsheet data.</div>`;
+      }
+      const bestValue = num(ranked[0][metric.key]);
+      const tied = ranked.filter(p => num(p[metric.key]) === bestValue);
+      const answerNames = tied.map(p=>`<strong>${escapeHTML(p.name)}</strong>${isGoalie(p)?" (goalie)":""}`).join(", ");
+      const verb = wantsLowest || lowerIsBetter ? "lowest" : "most";
+      return `${answerNames} ${tied.length===1?"has":"are tied for"} the ${verb} ${escapeHTML(metric.label)}: <strong>${escapeHTML(assistantFormat(ranked[0][metric.key],metric.key))}</strong>.${birthMatch?`<br>Filtered to birth year ${birthMatch[1]}.`:""}${ageMatch?`<br>Filtered to ${/19/.test(ageMatch[1])?"19U":"16U"}.`:""}<div class="assistant-muted">Based on the currently published spreadsheet data.</div>`;
+    }
+
+    document.getElementById("statsAssistantForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const question = document.getElementById("statsQuestion").value.trim();
+      const answer = document.getElementById("statsAnswer");
+      if (!question) return;
+      answer.innerHTML = answerStatsQuestion(question);
+    });
+    document.querySelectorAll("[data-question]").forEach(button => button.addEventListener("click", () => {
+      document.getElementById("statsQuestion").value = button.dataset.question;
+      document.getElementById("statsAnswer").innerHTML = answerStatsQuestion(button.dataset.question);
+    }));
+
 
     async function loadRoster() {
       try {
