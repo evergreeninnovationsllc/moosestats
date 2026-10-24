@@ -50,7 +50,6 @@
     .player-title-line,.player-meta-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 9px}
     .player-meta-line{margin-top:4px;color:var(--muted);font-size:.85rem}
     .player-number,.player-birth-year{color:var(--accent2);font-weight:800}
-    .captain-badge{display:inline-flex;align-items:center;justify-content:center;min-width:23px;height:23px;padding:0 6px;border-radius:4px;background:#e7b847;color:#111;font-size:.78rem;font-weight:950;line-height:1;box-shadow:0 0 0 1px #fff3 inset}
     .chevron{color:var(--accent);font-size:1.1rem;margin-left:auto}
     details[open] .chevron{transform:rotate(180deg)}
     .quick-stats,.expanded-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
@@ -124,6 +123,14 @@
     <details class="accordion" id="accordion19">
       <summary>19U Roster <span class="section-count" id="count19">(0)</span></summary>
       <div class="accordion-content"><div id="grid19" class="grid" aria-label="19U player cards"></div></div>
+    </details>
+    <details class="accordion" id="goalieAccordion16">
+      <summary>16U Goalies <span class="section-count" id="countGoalies16">(0)</span></summary>
+      <div class="accordion-content"><div id="goalieGrid16" class="grid" aria-label="16U goalie cards"></div></div>
+    </details>
+    <details class="accordion" id="goalieAccordion19">
+      <summary>19U Goalies <span class="section-count" id="countGoalies19">(0)</span></summary>
+      <div class="accordion-content"><div id="goalieGrid19" class="grid" aria-label="19U goalie cards"></div></div>
     </details>
     <details class="accordion" id="unassignedSection" hidden>
       <summary>Roster not identified <span class="section-count" id="countUnassigned"></span></summary>
@@ -209,13 +216,12 @@
       faceoffPct: ["faceoffpct", "faceoffpercentage", "faceoffpercent", "fopct", "fo pct", "fo%"],
       passes: ["passes", "pass", "passattempts", "totalpasses"],
       passPct: ["passpct", "passpercentage", "passpercent", "passingpct", "passingpercentage"],
-      turnoverRatio: ["to", "turnoverratio", "turnoversratio", "turnoverrate", "turnoverpct", "turnovers"],
-      topSpeed: ["topspeed", "top speed", "maximumspeed", "maxspeed"],
-      captain: ["captain", "captaindesignation", "leadership"],
+      turnoverRatio: ["turnoverratio", "turnoversratio", "turnoverrate", "turnoverpct", "turnovers"],
       pim: ["pim", "penaltyminutes", "penalties"],
       wins: ["wins", "w"],
       losses: ["losses", "l"],
       gaa: ["gaa", "goalsagainstaverage"],
+      minutes: ["minutes", "mins", "min", "timeplayed", "minutesplayed", "toi"],
       savePct: ["savepct", "savepercentage", "svpct", "svpct", "savespercentage"],
       saves: ["saves", "sv"],
       shutouts: ["shutouts", "sho"],
@@ -342,8 +348,11 @@
           passes: valueAt(row, headers, "passes"),
           passPct: valueAt(row, headers, "passPct"),
           turnoverRatio: valueAt(row, headers, "turnoverRatio"),
-          topSpeed: valueAt(row, headers, "topSpeed"),
-          captain: valueAt(row, headers, "captain").trim().toUpperCase(),
+          savePct: valueAt(row, headers, "savePct"),
+          gaa: valueAt(row, headers, "gaa"),
+          minutes: valueAt(row, headers, "minutes"),
+          shutouts: valueAt(row, headers, "shutouts"),
+          wins: valueAt(row, headers, "wins"),
           photo: normalizePhotoURL(valueAt(row, headers, "photo")),
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
@@ -352,12 +361,16 @@
     }
 
     function statTile(label, value, isTopFive = false) {
-      return `<div class="stat${isTopFive ? " top-five" : ""}"><b>${escapeHTML(value || "—")}</b><span>${escapeHTML(label)}</span></div>`;
+      let shown = String(value ?? "").trim() || "—";
+      if (label.toLowerCase() === "save %" && shown !== "—" && shown !== "-") {
+        if (!shown.includes("%")) shown = num(shown) <= 1 && shown.includes(".") ? `${Math.round(num(shown) * 100)}%` : `${shown}%`;
+      }
+      return `<div class="stat${isTopFive ? " top-five" : ""}"><b>${escapeHTML(shown)}</b><span>${escapeHTML(label)}</span></div>`;
     }
 
     // Highlight each player's statistic when it ranks among the top five
     // within that player's own age-group roster.
-    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "topSpeed", "pim", "wins", "saves", "shutouts"];
+    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts"];
     function topFiveSet(list, key) {
       const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && Number.isFinite(num(p[key])))
         .slice().sort((a, b) => num(b[key]) - num(a[key]));
@@ -393,9 +406,16 @@
       ["Faceoff %", "faceoffPct"],
       ["Passes", "passes"],
       ["Pass%", "passPct"],
-      ["Turnover Rate", "turnoverRatio"],
-      ["Top Speed", "topSpeed"]
+      ["Turnover Ratio", "turnoverRatio"],
+      ["Save %", "savePct"],
+      ["GAA", "gaa"],
+      ["Minutes", "minutes"],
+      ["Shutouts", "shutouts"]
     ];
+
+    function isGoalie(p) {
+      return /\b(goalie|goaltender|goalkeeper)\b|^g$/i.test(String(p.position || "").trim());
+    }
 
     function rosterGroup(p) {
       const hint = String(p.rosterValue || "").toLowerCase().replace(/\s+/g, "");
@@ -412,15 +432,19 @@
       return String(name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase();
     }
 
-    function cardHTML(p) {
+    function cardHTML(p, goalieCard = false) {
       const meta = [p.position || "Position not listed", p.team && p.team !== p.rosterValue ? p.team : ""].filter(Boolean).join(" · ");
-      const quickKeys = ["games", "goals", "assists", "points"];
-      const advancedKeys = displayStats.filter(([, key]) =>
-        !["number", "birthYear", "games", "goals", "assists", "points"].includes(key)
-      );
+      const goalieStats = [
+        ["Goals", "goals"], ["Shots", "shots"], ["Save %", "savePct"], ["GAA", "gaa"],
+        ["Minutes", "minutes"], ["Shutouts", "shutouts"], ["Passes", "passes"], ["Assists", "assists"]
+      ];
+      const quickKeys = goalieCard ? ["goals", "shots", "savePct", "gaa"] : ["games", "goals", "assists", "points"];
+      const advancedKeys = goalieCard
+        ? goalieStats.filter(([, key]) => !quickKeys.includes(key))
+        : displayStats.filter(([, key]) => !["number", "birthYear", "games", "goals", "assists", "points"].includes(key));
       const quick = quickKeys.map(key => {
-        const item = displayStats.find(([, statKey]) => statKey === key);
-        return statTile(item[0], p[key], isTopFive(p, key));
+        const item = (goalieCard ? goalieStats : displayStats).find(([, statKey]) => statKey === key);
+        return statTile(item ? item[0] : key, p[key], isTopFive(p, key));
       }).join("");
       const advanced = advancedKeys.map(([label, key]) => statTile(label, p[key], isTopFive(p, key))).join("");
       const photo = p.photo
@@ -435,7 +459,6 @@
             <div class="player-name">
               <div class="player-title-line">
                 <h3>${escapeHTML(p.name)}</h3>
-                ${["A", "C"].includes(p.captain) ? `<span class="captain-badge" title="${p.captain === "C" ? "Captain" : "Assistant Captain"}">${escapeHTML(p.captain)}</span>` : ""}
                 <span class="player-number">#${escapeHTML(p.number || "—")}</span>
               </div>
               <div class="player-meta-line">
@@ -498,16 +521,22 @@
       // Build rankings before generating cards so top-five classes are applied on first render.
       topFiveByRoster = buildTopFiveByRoster();
       const grouped = {
-        "16U": filtered.filter(p => rosterGroup(p) === "16U"),
-        "19U": filtered.filter(p => rosterGroup(p) === "19U"),
-        "Unassigned": filtered.filter(p => rosterGroup(p) === "Unassigned")
+        "16U": filtered.filter(p => rosterGroup(p) === "16U" && !isGoalie(p)),
+        "19U": filtered.filter(p => rosterGroup(p) === "19U" && !isGoalie(p)),
+        "Unassigned": filtered.filter(p => rosterGroup(p) === "Unassigned"),
+        goalies16: filtered.filter(p => rosterGroup(p) === "16U" && isGoalie(p)),
+        goalies19: filtered.filter(p => rosterGroup(p) === "19U" && isGoalie(p))
       };
-      document.getElementById("grid16").innerHTML = grouped["16U"].map(cardHTML).join("") || '<div class="empty">No 16U players match the current filters.</div>';
-      document.getElementById("grid19").innerHTML = grouped["19U"].map(cardHTML).join("") || '<div class="empty">No 19U players match the current filters.</div>';
-      document.getElementById("gridUnassigned").innerHTML = grouped.Unassigned.map(cardHTML).join("");
+      document.getElementById("grid16").innerHTML = grouped["16U"].map(p => cardHTML(p)).join("") || '<div class="empty">No 16U players match the current filters.</div>';
+      document.getElementById("grid19").innerHTML = grouped["19U"].map(p => cardHTML(p)).join("") || '<div class="empty">No 19U players match the current filters.</div>';
+      document.getElementById("goalieGrid16").innerHTML = grouped.goalies16.map(p => cardHTML(p, true)).join("") || '<div class="empty">No 16U goalies match the current filters.</div>';
+      document.getElementById("goalieGrid19").innerHTML = grouped.goalies19.map(p => cardHTML(p, true)).join("") || '<div class="empty">No 19U goalies match the current filters.</div>';
+      document.getElementById("gridUnassigned").innerHTML = grouped.Unassigned.map(p => cardHTML(p)).join("");
       document.getElementById("unassignedSection").hidden = grouped.Unassigned.length === 0;
       document.getElementById("count16").textContent = `(${grouped["16U"].length})`;
       document.getElementById("count19").textContent = `(${grouped["19U"].length})`;
+      document.getElementById("countGoalies16").textContent = `(${grouped.goalies16.length})`;
+      document.getElementById("countGoalies19").textContent = `(${grouped.goalies19.length})`;
       document.getElementById("countUnassigned").textContent = `(${grouped.Unassigned.length})`;
 
       const sumStat = key => filtered.reduce((sum, p) => sum + num(p[key]), 0);
@@ -517,11 +546,13 @@
         const avg = values.reduce((sum, v) => sum + num(v), 0) / values.length;
         return `${Math.round(avg)}%`;
       };
+      // Team total = the highest games-played value in each age group, added together.
+      // Include goalies because they are part of their age-group roster.
       const rosterGameMaxima = ["16U", "19U"].map(group => {
         const rosterPlayers = players.filter(p => rosterGroup(p) === group);
         return rosterPlayers.length ? Math.max(...rosterPlayers.map(p => num(p.games))) : 0;
       });
-      document.getElementById("totalGames").textContent = Math.max(0, ...rosterGameMaxima);
+      document.getElementById("totalGames").textContent = rosterGameMaxima.reduce((sum, games) => sum + games, 0);
       document.getElementById("totalGoals").textContent = sumStat("goals");
       document.getElementById("totalAssists").textContent = sumStat("assists");
       document.getElementById("totalHits").textContent = sumStat("hits");
@@ -542,7 +573,9 @@
         if (!text.trim() || text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
           throw new Error("The spreadsheet did not return CSV text. Check that it is published to the web as CSV.");
         }
-        const rows = parseCSV(text);
+        const rows = parseCSV(text).map(row => row.map(value =>
+          String(value ?? "").trim().toUpperCase() === "#DIV/0!" ? "-" : value
+        ));
         players = makePlayers(rows);
         if (!players.length) {
           throw new Error("CSV loaded, but no player names were detected. Check the first-row headers and the player-name column.");
