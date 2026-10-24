@@ -80,6 +80,20 @@
     .team-stats-table td.team-stat-winner{background:rgba(20,78,43,.5);color:#64ed91;font-weight:850;box-shadow:inset 0 0 0 1px #42d879}
     .team-stats-note{margin:0 0 10px;color:var(--muted);font-size:.82rem}
 
+
+    .radar-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+    .radar-heading{margin:0 0 4px;color:var(--accent);font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+    .radar-note{margin:0 0 8px;color:var(--muted);font-size:.78rem}
+    .radar-wrap{width:100%;max-width:560px;margin:0 auto;overflow:visible}
+    .radar-chart{display:block;width:100%;height:auto;overflow:visible}
+    .radar-grid{fill:none;stroke:#476073;stroke-width:1;opacity:.75}
+    .radar-axis{stroke:#476073;stroke-width:1;opacity:.7}
+    .radar-area{fill:#70b9e7;fill-opacity:.25;stroke:#8bd1ff;stroke-width:2.5;stroke-linejoin:round}
+    .radar-point{fill:#e3f5ff;stroke:#0c1c2b;stroke-width:1.5}
+    .radar-label{fill:#e4edf5;font-size:11px;font-weight:650}
+    .radar-scale{fill:#a9bac8;font-size:9px}
+    .radar-legend{color:var(--muted);font-size:.75rem;text-align:center;margin-top:3px}
+
     .stats-assistant{margin:18px 0;padding:18px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(16,35,51,.96),rgba(7,16,25,.98));box-shadow:0 12px 28px rgba(0,0,0,.18)}
     .stats-assistant h3{margin:0 0 6px;font-size:1.15rem}.stats-assistant p{margin:0 0 12px;color:var(--muted);font-size:.9rem}
     .assistant-form{display:flex;gap:8px}.assistant-form input{flex:1;min-width:0;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#06111b;color:var(--text);font:inherit}.assistant-form button{padding:11px 16px;border:0;border-radius:10px;background:var(--accent,#b8e986);color:#071019;font-weight:800;cursor:pointer}
@@ -537,6 +551,40 @@
       return String(name || "?").trim().split(/\s+/).slice(0, 2).map(part => part[0] || "").join("").toUpperCase();
     }
 
+    // Player-only spiderweb. Values come from the skater CSV fields mapped in makePlayers().
+    // Each plotted value is a percentile calculated from the actual CSV stat for players
+    // in the same age group; the tooltip also shows the player's original CSV value.
+    function radarChartHTML(p) {
+      const axes = [
+        {label:"Goals",key:"goals"}, {label:"Assists",key:"assists"},
+        {label:"Points",key:"points"}, {label:"Shots",key:"shots"},
+        {label:"Hits",key:"hits"}, {label:"Blocked Shots",key:"blockedShots"},
+        {label:"Passes",key:"passes"}, {label:"Faceoff %",key:"faceoffPct"}
+      ];
+      const peers = players.filter(candidate => rosterGroup(candidate) === rosterGroup(p) && !isGoalie(candidate));
+      const usable = axes.map(axis => {
+        const groupValues = peers.map(peer => ({value:num(peer[axis.key]), raw:String(peer[axis.key] ?? "").trim()}))
+          .filter(item => item.raw !== "" && item.raw !== "-" && item.raw.toLowerCase() !== "#div/0!" && Number.isFinite(item.value));
+        const currentRaw = String(p[axis.key] ?? "").trim();
+        if (!currentRaw || currentRaw === "-" || currentRaw.toLowerCase() === "#div/0!" || !groupValues.length) return null;
+        const current = num(p[axis.key]);
+        const betterOrEqual = groupValues.filter(item => item.value <= current).length;
+        const score = Math.max(0, Math.min(100, betterOrEqual / groupValues.length * 100));
+        return {...axis, current, currentRaw, score, count:groupValues.length};
+      }).filter(Boolean);
+      if (usable.length < 3) return `<div class="radar-section"><p class="radar-heading">Player stat spiderweb</p><p class="radar-note">Not enough valid player stats from the CSV are available to draw a chart.</p></div>`;
+      const width=480, height=370, cx=240, cy=178, radius=112, labelRadius=143;
+      const point=(r,i)=>{const a=(-Math.PI/2)+(2*Math.PI*i/usable.length);return {x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,a};};
+      const poly=(r)=>usable.map((_,i)=>{const q=point(r,i);return `${q.x.toFixed(1)},${q.y.toFixed(1)}`;}).join(' ');
+      const rings=[20,40,60,80,100].map(v=>`<polygon class="radar-grid" points="${poly(radius*v/100)}"/>`).join('');
+      const spokes=usable.map((axis,i)=>{const q=point(radius,i);return `<line class="radar-axis" x1="${cx}" y1="${cy}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}"/>`;}).join('');
+      const labels=usable.map((axis,i)=>{const q=point(labelRadius,i);let anchor='middle';if(q.x<cx-10)anchor='end';else if(q.x>cx+10)anchor='start';let y=q.y;if(q.y<cy-radius+8)y-=3;return `<text class="radar-label" x="${q.x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escapeHTML(axis.label)}</text>`;}).join('');
+      const coords=usable.map((axis,i)=>{const q=point(radius*axis.score/100,i);return `${q.x.toFixed(1)},${q.y.toFixed(1)}`;}).join(' ');
+      const dots=usable.map((axis,i)=>{const q=point(radius*axis.score/100,i);return `<circle class="radar-point" cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="4"><title>${escapeHTML(axis.label)}: CSV value ${escapeHTML(axis.currentRaw)}; ${axis.score.toFixed(0)}th percentile among ${escapeHTML(rosterGroup(p))} players</title></circle>`;}).join('');
+      const title=`${p.name} player stat spiderweb`;
+      return `<div class="radar-section"><p class="radar-heading">Player stat spiderweb</p><p class="radar-note">Uses the player's skater-stat CSV values. The chart scales each available statistic to a percentile among ${escapeHTML(rosterGroup(p))} players so different units can be compared. Hover or tap a point to see the original CSV value.</p><div class="radar-wrap"><svg class="radar-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(title)}"><title>${escapeHTML(title)}</title>${rings}${spokes}<polygon class="radar-area" points="${coords}"/>${dots}${labels}<text class="radar-scale" x="${cx+4}" y="${cy-radius+4}">100</text><text class="radar-scale" x="${cx+4}" y="${cy-radius*.6+4}">60</text><text class="radar-scale" x="${cx+4}" y="${cy-radius*.2+4}">20</text></svg></div><div class="radar-legend">Higher percentile = stronger relative ranking in this age group. Missing CSV values are omitted.</div></div>`;
+    }
+
     function cardHTML(p, goalieCard = false) {
       const meta = [p.position || "Position not listed", p.team && p.team !== p.rosterValue ? p.team : ""].filter(Boolean).join(" · ");
       const goalieStats = [
@@ -578,6 +626,7 @@
         <div class="player-body">
           <p class="section-label">Additional statistics</p>
           <div class="expanded-stats">${advanced}</div>
+          ${goalieCard ? "" : radarChartHTML(p)}
         </div>
       </details>`;
     }
