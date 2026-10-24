@@ -208,7 +208,7 @@
       assists: ["assists", "a"],
       points: ["points", "pts", "p"],
       plusMinus: ["plusminus", "plusmin", "+minus", "pm"],
-      shots: ["shots", "sog", "shotsongoal", "shotsonnet"],
+      shots: ["shots", "shotsagainst", "sa", "sog", "shotsongoal", "shotsonnet"],
       shotAttempts: ["shotattempts", "shotattempt", "attempts", "totalshotattempts"],
       hits: ["hits", "hit"],
       blockedShots: ["blockedshots", "blockedshot", "shotsblocked", "blocks"],
@@ -221,8 +221,8 @@
       wins: ["wins", "w"],
       losses: ["losses", "l"],
       gaa: ["gaa", "goalsagainstaverage"],
-      minutes: ["minutes", "mins", "min", "timeplayed", "minutesplayed", "toi"],
-      savePct: ["savepct", "savepercentage", "svpct", "svpct", "savespercentage"],
+      minutes: ["minutes", "mins", "min", "timeplayed", "minutesplayed", "toi", "mp"],
+      savePct: ["savepct", "savepercentage", "savepercent", "svpct", "svpercent", "savespercentage"],
       saves: ["saves", "sv"],
       shutouts: ["shutouts", "sho"],
       height: ["height"],
@@ -261,6 +261,45 @@
     function valueAt(row, headers, key) {
       const index = findColumn(headers, key);
       return index >= 0 ? String(row[index] ?? "").trim() : "";
+    }
+
+    // Prefer goalie-specific columns where the CSV contains both skater and goalie
+    // stat columns. This avoids accidentally reading the skater Goals/Shots column.
+    function goalieValueAt(row, headers, key) {
+      const normalizedHeaders = headers.map(normalize);
+      const aliasesForKey = aliases[key] || [key];
+      const normalizedAliases = aliasesForKey.map(normalize);
+      const goalieTerms = ["goalie", "goaltender", "goalkeeper", "gstat"];
+      const isGoalieHeader = h => goalieTerms.some(term => h.includes(term));
+      const goalieIndexes = normalizedHeaders
+        .map((h, i) => ({ h, i }))
+        .filter(item => isGoalieHeader(item.h));
+      // First prefer an explicitly goalie-labelled column with the requested stat.
+      for (const alias of normalizedAliases) {
+        const found = goalieIndexes.find(item => item.h.includes(alias) || alias.includes(item.h));
+        if (found) return String(row[found.i] ?? "").trim();
+      }
+      // Common goalie-specific labels that don't literally include the word goalie.
+      const special = {
+        goals: ["goals", "g"], shots: ["shotsagainst", "shots", "sa"],
+        savePct: ["savepct", "savepercentage", "svpct", "svpercent"],
+        gaa: ["gaa", "goalsagainstaverage"], minutes: ["minutes", "mins", "minutesplayed", "toi", "toi"],
+        shutouts: ["shutouts", "sho"], passes: ["passes", "pass"], assists: ["assists", "a"]
+      }[key] || normalizedAliases;
+      // Exact matches are safer than substring matches when headers have similar names.
+      for (const alias of special) {
+        // Some CSV exports contain duplicate headers for skaters and goalies.
+        // The goalie table is commonly later in the sheet, so use the last exact
+        // match rather than accidentally reading the skater's column.
+        const exact = normalizedHeaders.findLastIndex(h => h === alias);
+        if (exact >= 0) return String(row[exact] ?? "").trim();
+      }
+      // Prefer stat-labelled columns over skater variants, e.g. "Shots Against" over "Shot Attempts".
+      if (key === "shots") {
+        const against = normalizedHeaders.findIndex(h => h.includes("shotsagainst") || h === "sa");
+        if (against >= 0) return String(row[against] ?? "").trim();
+      }
+      return valueAt(row, headers, key);
     }
 
     // Convert Google Drive links to image-serving URLs. Drive files must be shared
@@ -325,7 +364,7 @@
         }
         const team = valueAt(row, headers, "team");
         const rosterValue = valueAt(row, headers, "roster") || team;
-        return {
+        const player = {
           raw: row,
           headers,
           name,
@@ -357,6 +396,13 @@
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
         };
+        if (/\b(goalie|goaltender|goalkeeper)\b|^g$/i.test(String(player.position || "").trim())) {
+          for (const key of ["goals", "shots", "savePct", "gaa", "minutes", "shutouts", "passes", "assists"]) {
+            const value = goalieValueAt(row, headers, key);
+            if (value !== "") player[key] = value;
+          }
+        }
+        return player;
       }).filter(p => p.name);
     }
 
@@ -368,26 +414,21 @@
       return `<div class="stat${isTopFive ? " top-five" : ""}"><b>${escapeHTML(shown)}</b><span>${escapeHTML(label)}</span></div>`;
     }
 
-    // Highlight each player's statistic when it ranks among the top five
-    // within that player's own age-group roster.
-    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts"];
-    function topFiveSet(list, key) {
-      const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && Number.isFinite(num(p[key])))
-        .slice().sort((a, b) => num(b[key]) - num(a[key]));
-      return new Set(eligible.slice(0, 5).map(p => p));
+    // Highlight only the single best value for each stat within each age-group
+    // and player type. Goals and GAA are intentionally ranked low-to-high.
+    const rankingKeys = ["games", "goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio", "pim", "wins", "saves", "shutouts", "savePct", "gaa", "minutes"];
+    const lowWinsKeys = new Set(["goals", "gaa"]);
+    function bestStatSet(list, key) {
+      const eligible = list.filter(p => String(p[key] ?? "").trim() !== "" && String(p[key]).trim() !== "-" && Number.isFinite(num(p[key])));
+      if (!eligible.length) return new Set();
+      eligible.sort((a, b) => lowWinsKeys.has(key) ? num(a[key]) - num(b[key]) : num(b[key]) - num(a[key]));
+      const best = num(eligible[0][key]);
+      return new Set(eligible.filter(p => num(p[key]) === best));
     }
-    function buildTopFiveByRoster() {
-      const result = { "16U": {}, "19U": {}, "Unassigned": {} };
-      for (const group of Object.keys(result)) {
-        const rosterPlayers = players.filter(p => rosterGroup(p) === group);
-        for (const key of rankingKeys) result[group][key] = topFiveSet(rosterPlayers, key);
-      }
-      return result;
-    }
-    let topFiveByRoster = { "16U": {}, "19U": {}, "Unassigned": {} };
     function isTopFive(p, key) {
-      const group = rosterGroup(p);
-      return Boolean(topFiveByRoster[group]?.[key]?.has(p));
+      const sameGroupAndType = players.filter(candidate =>
+        rosterGroup(candidate) === rosterGroup(p) && isGoalie(candidate) === isGoalie(p));
+      return bestStatSet(sameGroupAndType, key).has(p);
     }
 
     const displayStats = [
@@ -519,7 +560,6 @@
       });
 
       // Build rankings before generating cards so top-five classes are applied on first render.
-      topFiveByRoster = buildTopFiveByRoster();
       const grouped = {
         "16U": filtered.filter(p => rosterGroup(p) === "16U" && !isGoalie(p)),
         "19U": filtered.filter(p => rosterGroup(p) === "19U" && !isGoalie(p)),
@@ -576,7 +616,9 @@
         const rows = parseCSV(text).map(row => row.map(value =>
           String(value ?? "").trim().toUpperCase() === "#DIV/0!" ? "-" : value
         ));
-        players = makePlayers(rows);
+        // Treat spreadsheet division-by-zero errors as a display dash.
+        const cleanedRows = rows.map(row => row.map(value => String(value ?? "").trim() === "#DIV/0!" ? "-" : value));
+        players = makePlayers(cleanedRows);
         if (!players.length) {
           throw new Error("CSV loaded, but no player names were detected. Check the first-row headers and the player-name column.");
         }
