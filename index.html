@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,6 +58,9 @@
     .stat.top-green b,.stat.top-green span{color:#64ed91!important;text-shadow:0 0 8px rgba(100,237,145,.12)}
     .stat.top-yellow{border-color:#e6c84f;background:rgba(100,82,15,.28)}
     .stat.top-yellow b,.stat.top-yellow span{color:#ffe477!important;text-shadow:0 0 8px rgba(255,228,119,.08)}
+    .stat.bottom-red{border-color:#e05252;background:rgba(105,22,28,.3)}
+    .stat.bottom-red b,.stat.bottom-red span{color:#ff8b8b!important;text-shadow:0 0 8px rgba(255,139,139,.08)}
+    .captain-badge{display:inline-grid;place-items:center;min-width:21px;height:21px;margin-left:7px;padding:0 5px;border-radius:5px;background:#d72e3f;color:#fff;font-size:.72rem;font-weight:900;vertical-align:middle;box-shadow:0 0 10px #d72e3f45}
     .stat span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.02em}
     .player-body{border-top:1px solid var(--line);padding:12px}
     .section-label{color:var(--accent);font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
@@ -76,6 +78,7 @@
     .team-stats-table{width:100%;border-collapse:collapse;min-width:420px}
     .team-stats-table th,.team-stats-table td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
     .team-stats-table th:first-child,.team-stats-table td:first-child{text-align:left}
+    .team-stats-table th:nth-child(n+2),.team-stats-table td:nth-child(n+2){text-align:center}
     .team-stats-table thead th{background:rgba(16,40,58,.9);color:var(--accent2);font-size:.82rem;text-transform:uppercase;letter-spacing:.035em}
     .team-stats-table tbody tr:last-child td{border-bottom:0}
     .team-stats-table td.team-stat-winner{background:rgba(20,78,43,.5);color:#64ed91;font-weight:850;box-shadow:inset 0 0 0 1px #42d879}
@@ -299,6 +302,7 @@
       hometown: ["hometown", "home"],
       age: ["age"],
       school: ["school"],
+      captain: ["captain", "captain designation", "leadership", "letter"],
       photo: [
         "photourl", "photo url", "playerphotourl", "player photo url", "photo", "playerphoto", "playerpicture",
         "playerpictureurl", "picture", "pictureurl", "picturelink", "photolink",
@@ -467,6 +471,8 @@
           shutouts: valueAt(row, headers, "shutouts"),
           wins: valueAt(row, headers, "wins"),
           photo: normalizePhotoURL(valueAt(row, headers, "photo")),
+          captain: valueAt(row, headers, "captain").toUpperCase(),
+          shotPct: (num(valueAt(row, headers, "shotAttempts")) > 0 && valueAt(row, headers, "shots") !== "") ? (num(valueAt(row, headers, "shots")) / num(valueAt(row, headers, "shotAttempts"))) * 100 : "",
           stats: headers.map((header, i) => ({ label: header, value: String(row[i] ?? "").trim() }))
             .filter(item => item.label && item.value)
         };
@@ -491,8 +497,9 @@
       return `<div class="${cssClass}"><b>${escapeHTML(shown)}</b><span>${escapeHTML(label)}</span></div>`;
     }
 
-    // Player highlights: games played leader only; for other listed stats, leader
-    // is green and the next two ranks are yellow. Goalie highlights are green only.
+    // Leaders retain the existing green/yellow styling. The lowest active player
+    // in each category is highlighted red; players with 0 games are excluded from
+    // bottom-rank comparisons so inactive players do not skew the result.
     const playerRankedKeys = new Set(["goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio"]);
     const playerHighlightKeys = new Set(["games", ...playerRankedKeys]);
 
@@ -509,12 +516,19 @@
       });
       if (!eligible.length) return "";
       const lowerWins = (goalie && (key === "goals" || key === "gaa"));
-      eligible.sort((a, b) => lowerWins ? num(a[key]) - num(b[key]) : num(b[key]) - num(a[key]));
       const rank = eligible.filter(candidate => lowerWins
         ? num(candidate[key]) < num(p[key])
         : num(candidate[key]) > num(p[key])).length;
       if (rank === 0) return "top-green";
       if (!goalie && key !== "games" && playerRankedKeys.has(key) && rank <= 2) return "top-yellow";
+
+      const activeEligible = eligible.filter(candidate => num(candidate.games) > 0);
+      if (activeEligible.length > 1 && num(p.games) > 0) {
+        const worstValue = lowerWins
+          ? Math.max(...activeEligible.map(candidate => num(candidate[key])))
+          : Math.min(...activeEligible.map(candidate => num(candidate[key])));
+        if (num(p[key]) === worstValue) return "bottom-red";
+      }
       return "";
     }
 
@@ -562,9 +576,11 @@
     function radarChartHTML(p) {
       const axes = [
         {label:"Goals",key:"goals"}, {label:"Assists",key:"assists"},
-        {label:"Points",key:"points"}, {label:"Shots",key:"shots"},
-        {label:"Hits",key:"hits"}, {label:"Blocked Shots",key:"blockedShots"},
-        {label:"Passes",key:"passes"}, {label:"Faceoff %",key:"faceoffPct"}
+        {label:"Points",key:"points"}, {label:"Shot Attempts",key:"shotAttempts"},
+        {label:"Shot %",key:"shotPct"}, {label:"Passes",key:"passes"},
+        {label:"Pass %",key:"passPct"}, {label:"Faceoffs",key:"faceoffs"},
+        {label:"Faceoff %",key:"faceoffPct"}, {label:"Hits",key:"hits"},
+        {label:"Blocked Shots",key:"blockedShots"}
       ];
       const peers = players.filter(candidate => rosterGroup(candidate) === rosterGroup(p) && !isGoalie(candidate));
       const usable = axes.map(axis => {
@@ -616,7 +632,7 @@
             ${photo}
             <div class="player-name">
               <div class="player-title-line">
-                <h3>${escapeHTML(p.name)}</h3>
+                <h3>${escapeHTML(p.name)}${["A","C"].includes(p.captain) ? ` <span class="captain-badge" aria-label="${p.captain === "C" ? "Captain" : "Alternate captain"}">${p.captain}</span>` : ""}</h3>
                 <span class="player-number">#${escapeHTML(p.number || "—")}</span>
               </div>
               <div class="player-meta-line">
@@ -643,11 +659,13 @@
         ["Goals", "goals", skaters, false],
         ["Assists", "assists", skaters, false],
         ["Points", "points", skaters, false],
-        ["Player Shots", "shots", skaters, false],
+        ["Shots", "shots", skaters, false],
         ["Hits", "hits", skaters, false],
         ["Passes", "passes", skaters, false],
-        ["FO %", "faceoffPct", skaters, false],
+        ["FO %", "faceoffPct", skaters.filter(p => num(p.faceoffs) >= 10), false],
         ["Turnover Ratio", "turnoverRatio", skaters, false],
+        ["Goalie Save %", "savePct", goalies, false],
+        ["Shutouts", "shutouts", goalies, false],
         ["PIM", "pim", skaters, false],
         ["Goalie Shots Faced", "shots", goalies, false],
         ["Lowest Goalie GAA", "gaa", goalies, true]
@@ -691,6 +709,7 @@
         shots: ["shots", "shots on goal", "sog"], shotPct: ["shot %", "shot%", "shot percentage", "shooting %", "shooting percentage"],
         faceoffs: ["faceoffs", "faceoff attempts", "total faceoffs"], faceoffWins: ["faceoff wins", "faceoffs won", "fow"],
         faceoffPct: ["faceoff %", "faceoff%", "faceoff percentage", "fo %"], passes: ["passes", "total passes"],
+        passPct: ["pass %", "pass%", "pass percentage", "passing %", "passing percentage"],
         hits: ["hits"], pim: ["pim", "penalty minutes"], shotsAgainst: ["shots against", "shots faced", "sa"],
         savePct: ["save %", "save%", "save percentage", "sv %"]
       };
@@ -737,13 +756,13 @@
     }
 
     function teamStatSummary(group) {
-      const keys = ["games", "goalsFor", "goalsAgainst", "goalDifferential", "shotAttempts", "shotsMissed", "shots", "shotPct", "faceoffs", "faceoffWins", "faceoffPct", "passes", "hits", "pim", "shotsAgainst", "savePct"];
+      const keys = ["games", "goalsFor", "goalsAgainst", "goalDifferential", "shotAttempts", "shotsMissed", "shots", "shotPct", "faceoffs", "faceoffWins", "faceoffPct", "passes", "passPct", "hits", "pim", "shotsAgainst", "savePct"];
       return Object.fromEntries(keys.map(key => [key, teamDataValue(group, key)]));
     }
 
     function formatTeamStat(key, value) {
       if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-      if (["shotPct", "faceoffPct", "savePct"].includes(key)) return `${value.toFixed(1)}%`;
+      if (["shotPct", "faceoffPct", "passPct", "savePct"].includes(key)) return `${value.toFixed(1)}%`;
       return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
     }
 
@@ -753,7 +772,7 @@
         ["Games Played", "games"], ["Goals For", "goalsFor"], ["Goals Against", "goalsAgainst", true],
         ["Goal Differential", "goalDifferential"], ["Shot Attempts", "shotAttempts"], ["Shots Missed", "shotsMissed"],
         ["Shots", "shots"], ["Shot %", "shotPct"], ["Faceoffs", "faceoffs"], ["Faceoff Wins", "faceoffWins"],
-        ["Faceoff %", "faceoffPct"], ["Passes", "passes"], ["Hits", "hits"], ["PIM", "pim"],
+        ["Faceoff %", "faceoffPct"], ["Passes", "passes"], ["Pass %", "passPct"], ["Hits", "hits"], ["PIM", "pim"],
         ["Shots Against", "shotsAgainst", true], ["Save %", "savePct"]
       ];
       const rows = metrics.map(([label, key, lowerWins = false]) => {
@@ -833,7 +852,7 @@
       const teamFaceoffWins = ["16U", "19U"].reduce((total, group) => total + (num(teamDataValue(group, "faceoffWins")) || 0), 0);
       const teamFaceoffAttempts = ["16U", "19U"].reduce((total, group) => total + (num(teamDataValue(group, "faceoffs")) || 0), 0);
       document.getElementById("avgFoPct").textContent = teamFaceoffAttempts > 0
-        ? `${(teamFaceoffWins / teamFaceoffAttempts * 100).toFixed(1)}%`
+        ? `${Math.round(teamFaceoffWins / teamFaceoffAttempts * 100)}%`
         : "—";
       renderLeaderboard(filtered);
       renderTeamStats();
