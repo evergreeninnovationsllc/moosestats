@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -116,7 +117,7 @@
       <div id="logoFallback" class="logo-fallback" hidden aria-hidden="true">M</div>
       <div>
         <div class="brand-kicker">Rocky Mountain Moose</div>
-        <h1>2026-2027 16U & 18U Stats</h1>
+        <h1>2026-2027 Stats</h1>
       </div>
     </div>
   </header>
@@ -145,7 +146,7 @@
 
     <section class="stats-assistant" aria-labelledby="assistantTitle">
       <h3 id="assistantTitle">Ask Moose Stats</h3>
-      <p>Ask a question about the current season statistics. Answers are calculated from the stats spreadsheet.</p>
+      <p>Ask a question about the current season statistics. Answers are calculated from the published team spreadsheet.</p>
       <form class="assistant-form" id="statsAssistantForm">
         <input id="statsQuestion" type="search" autocomplete="off" placeholder="e.g. Which 2010 player has the most passes?" aria-label="Ask a question about team statistics" required>
         <button type="submit">Ask</button>
@@ -196,7 +197,7 @@
   <footer>
     <div class="wrap">
       <span>Rocky Mountain Moose · Moose Stats</span>
-      <span>Stats source: Sage Sports Science</span>
+      <span>Stats source: published team spreadsheet</span>
     </div>
   </footer>
 
@@ -827,7 +828,13 @@
       document.getElementById("totalAssists").textContent = sumStat("assists");
       document.getElementById("totalHits").textContent = sumStat("hits");
       document.getElementById("avgPassPct").textContent = averagePct("passPct");
-      document.getElementById("avgFoPct").textContent = averagePct("faceoffPct");
+      // Overall faceoff percentage must be weighted from the Team Data tab totals,
+      // not averaged across individual players' percentages.
+      const teamFaceoffWins = ["16U", "19U"].reduce((total, group) => total + (num(teamDataValue(group, "faceoffWins")) || 0), 0);
+      const teamFaceoffAttempts = ["16U", "19U"].reduce((total, group) => total + (num(teamDataValue(group, "faceoffs")) || 0), 0);
+      document.getElementById("avgFoPct").textContent = teamFaceoffAttempts > 0
+        ? `${(teamFaceoffWins / teamFaceoffAttempts * 100).toFixed(1)}%`
+        : "—";
       renderLeaderboard(filtered);
       renderTeamStats();
       statusEl.textContent = `${filtered.length} players shown`;
