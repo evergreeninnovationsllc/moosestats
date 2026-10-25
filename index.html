@@ -502,7 +502,7 @@
     // Leaders retain the existing green/yellow styling. The lowest active player
     // in each category is highlighted red; players with 0 games are excluded from
     // bottom-rank comparisons so inactive players do not skew the result.
-    const playerRankedKeys = new Set(["goals", "assists", "points", "plusMinus", "shots", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio"]);
+    const playerRankedKeys = new Set(["goals", "assists", "points", "plusMinus", "shots", "topSpeed", "shotAttempts", "hits", "blockedShots", "faceoffs", "faceoffPct", "passes", "passPct", "turnoverRatio"]);
     const playerHighlightKeys = new Set(["games", ...playerRankedKeys]);
 
     function highlightClass(p, key) {
@@ -521,6 +521,13 @@
       const rank = eligible.filter(candidate => lowerWins
         ? num(candidate[key]) < num(p[key])
         : num(candidate[key]) > num(p[key])).length;
+      // Top Speed has a special age-group ranking: fastest is green, next two are yellow.
+      // Do not apply the usual lowest-stat red highlight to Top Speed.
+      if (key === "topSpeed") {
+        if (rank === 0) return "top-green";
+        if (rank <= 2) return "top-yellow";
+        return "";
+      }
       if (rank === 0) return "top-green";
       if (!goalie && key !== "games" && playerRankedKeys.has(key) && rank <= 2) return "top-yellow";
 
